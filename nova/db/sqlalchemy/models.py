@@ -139,6 +139,7 @@ class ComputeNode(BASE, NovaBase):
     free_disk_gb = Column(Integer)
     current_workload = Column(Integer)
     running_vms = Column(Integer)
+    total_vms = Column(Integer)
 
     # Note(masumotok): Expected Strings example:
     #

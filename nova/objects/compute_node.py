@@ -40,7 +40,8 @@ class ComputeNode(base.NovaPersistentObject, base.NovaObject,
     # Version 1.9: Added pci_device_pools
     # Version 1.10: Added get_first_node_by_host_for_old_compat()
     # Version 1.11: PciDevicePoolList version 1.1
-    VERSION = '1.11'
+    # Version 1.12: Add total_vms field
+    VERSION = '1.12'
 
     fields = {
         'id': fields.IntegerField(read_only=True),
@@ -59,6 +60,7 @@ class ComputeNode(base.NovaPersistentObject, base.NovaObject,
         'free_disk_gb': fields.IntegerField(nullable=True),
         'current_workload': fields.IntegerField(nullable=True),
         'running_vms': fields.IntegerField(nullable=True),
+        'total_vms': fields.IntegerField(nullable=True),
         'cpu_info': fields.StringField(nullable=True),
         'disk_available_least': fields.IntegerField(nullable=True),
         'metrics': fields.StringField(nullable=True),
@@ -82,6 +84,8 @@ class ComputeNode(base.NovaPersistentObject, base.NovaObject,
     def obj_make_compatible(self, primitive, target_version):
         super(ComputeNode, self).obj_make_compatible(primitive, target_version)
         target_version = utils.convert_version_to_tuple(target_version)
+        if target_version < (1, 12) and 'total_vms' in primitive:
+            del primitive['total_vms']
         if target_version < (1, 7) and 'host' in primitive:
             del primitive['host']
         if target_version < (1, 5) and 'numa_topology' in primitive:
@@ -311,7 +315,8 @@ class ComputeNodeList(base.ObjectListBase, base.NovaObject):
     # Version 1.9 ComputeNode version 1.9
     # Version 1.10 ComputeNode version 1.10
     # Version 1.11 ComputeNode version 1.11
-    VERSION = '1.11'
+    # Version 1.12 ComputeNode version 1.12
+    VERSION = '1.12'
     fields = {
         'objects': fields.ListOfObjectsField('ComputeNode'),
         }
@@ -329,6 +334,7 @@ class ComputeNodeList(base.ObjectListBase, base.NovaObject):
         '1.9': '1.9',
         '1.10': '1.10',
         '1.11': '1.11',
+        '1.12': '1.12',
         }
 
     @base.remotable_classmethod

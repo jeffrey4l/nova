@@ -247,6 +247,7 @@ class BaseTestCase(test.TestCase):
             "free_disk_gb": 1,
             "current_workload": 1,
             "running_vms": 0,
+            "total_vms": 0,
             "cpu_info": None,
             "numa_topology": None,
             "stats": '{"num_instances": "1"}',

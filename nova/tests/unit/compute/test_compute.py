@@ -183,6 +183,7 @@ class BaseTestCase(test.TestCase):
                                    'vcpus': 16,
                                    'cpu_info': 'ppc64,powervm,3940',
                                    'running_vms': 0,
+                                   'total_vms': 0,
                                    'free_disk_gb': 259,
                                    'service_id': 7,
                                    'hypervisor_version': 7,

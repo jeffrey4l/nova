@@ -75,6 +75,7 @@ fake_compute_node = {
     'free_disk_gb': 256,
     'current_workload': 100,
     'running_vms': 2013,
+    'total_vms': 2014,
     'cpu_info': 'Schmintel i786',
     'disk_available_least': 256,
     'metrics': '',
@@ -458,6 +459,12 @@ class _TestComputeNodeObject(object):
         compute.pci_device_pools = fake_pci_device_pools.fake_pool_list
         primitive = compute.obj_to_primitive(target_version='1.8')
         self.assertNotIn('pci_device_pools', primitive)
+
+    def test_compat_total_vms(self):
+        compute = compute_node.ComputeNode()
+        compute.total_vms = 123
+        primitive = compute.obj_to_primitive(target_version='1.11')
+        self.assertNotIn('total_vms', primitive)
 
     def test_update_from_virt_driver(self):
         # copy in case the update has a side effect

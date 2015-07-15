@@ -766,6 +766,13 @@ class NovaMigrationsCheckers(test_migrations.ModelsMigrationsSync,
         # the point-of-view of unit tests, since they use SQLite
         pass
 
+    def _check_299(self, engine, data):
+        self.assertColumnExists(engine, 'compute_nodes', 'total_vms')
+
+        compute_nodes = oslodbutils.get_table(engine, 'compute_nodes')
+        self.assertIsInstance(compute_nodes.c.total_vms.type,
+                              sqlalchemy.types.Integer)
+
 
 class TestNovaMigrationsSQLite(NovaMigrationsCheckers,
                                test_base.DbTestCase,
