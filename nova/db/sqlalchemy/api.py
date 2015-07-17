@@ -673,6 +673,7 @@ def compute_node_statistics(context):
                              func.sum(models.ComputeNode.free_disk_gb),
                              func.sum(models.ComputeNode.current_workload),
                              func.sum(models.ComputeNode.running_vms),
+                             func.sum(models.ComputeNode.total_vms),
                              func.sum(models.ComputeNode.disk_available_least),
                          ), read_deleted="no").\
                          filter(models.Service.disabled == false()).\
@@ -683,7 +684,8 @@ def compute_node_statistics(context):
     # Build a dict of the info--making no assumptions about result
     fields = ('count', 'vcpus', 'memory_mb', 'local_gb', 'vcpus_used',
               'memory_mb_used', 'local_gb_used', 'free_ram_mb', 'free_disk_gb',
-              'current_workload', 'running_vms', 'disk_available_least')
+              'current_workload', 'running_vms', 'total_vms',
+              'disk_available_least')
     return {field: int(result[idx] or 0)
             for idx, field in enumerate(fields)}
 

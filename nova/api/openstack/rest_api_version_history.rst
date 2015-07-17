@@ -90,3 +90,9 @@ user documentation.
 
   The old APIs 'os-getVNCConsole', 'os-getSPICEConsole', 'os-getSerialConsole'
   and 'os-getRDPConsole' are removed.
+
+2.7
+---
+
+  A ``total_vms`` field is added in ``os-hypervisors`` related api. 
+  ``running_vms`` and ``total_vms`` field exist in the response.

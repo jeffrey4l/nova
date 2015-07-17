@@ -66,6 +66,7 @@ _COMPUTE_NODE_FIXTURES = [
                       _VIRT_DRIVER_AVAIL_RESOURCES['local_gb_used']),
         current_workload=0,
         running_vms=0,
+        total_vms=0,
         cpu_info='{}',
         disk_available_least=0,
         host_ip='1.1.1.1',
@@ -1080,6 +1081,7 @@ class TestInstanceClaim(BaseTestCase):
             'free_disk_gb': expected['local_gb'] - disk_used,
             "free_ram_mb": expected['memory_mb'] - self.instance.memory_mb,
             'running_vms': 1,
+            'total_vms': 1,
             # 'vcpus_used': 0,  # vcpus are not claimed
             'pci_device_pools': objects.PciDevicePoolList(),
         })
@@ -1283,14 +1285,15 @@ class TestMoveClaim(BaseTestCase):
         with mock.patch.object(dst_instance, 'save'):
             dst_rt.instance_claim(self.ctx, dst_instance)
         self.adjust_expected(expected, new_itype)
-        expected.stats = {'num_task_resize_migrating': 1,
+        expected.stats = {u'num_task_resize_migrating': 1,
                              'io_workload': 1,
                              'num_instances': 1,
-                             'num_proj_fake-project': 1,
-                             'num_vm_active': 1,
-                             'num_os_type_fake-os': 1}
+                             u'num_proj_fake-project': 1,
+                             u'num_vm_active': 1,
+                             u'num_os_type_fake-os': 1}
         expected.current_workload = 1
         expected.running_vms = 1
+        expected.total_vms = 1
         self.assertTrue(obj_base.obj_equal_prims(expected,
                                                  dst_rt.compute_node))
 

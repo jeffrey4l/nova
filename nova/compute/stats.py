@@ -91,6 +91,11 @@ class Stats(dict):
         key = "num_os_type_%s" % os_type
         return self.get(key, 0)
 
+    @property
+    def num_running_vms(self):
+        key = "num_vm_%s" % vm_states.ACTIVE
+        return self.get(key, 0)
+
     def update_stats_for_instance(self, instance):
         """Update stats after an instance is changed."""
 

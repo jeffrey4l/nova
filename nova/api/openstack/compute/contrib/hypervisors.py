@@ -37,7 +37,7 @@ class HypervisorsController(object):
         super(HypervisorsController, self).__init__()
         self.ext_mgr = ext_mgr
 
-    def _view_hypervisor(self, hypervisor, service, detail, servers=None,
+    def _view_hypervisor(self, req, hypervisor, service, detail, servers=None,
                          **kwargs):
         hyp_dict = {
             'id': hypervisor.id,
@@ -56,12 +56,13 @@ class HypervisorsController(object):
                       'memory_mb_used', 'local_gb_used',
                       'hypervisor_type', 'hypervisor_version',
                       'free_ram_mb', 'free_disk_gb', 'current_workload',
-                      'running_vms', 'cpu_info', 'disk_available_least')
+                      'cpu_info', 'disk_available_least')
             ext_loaded = self.ext_mgr.is_loaded('os-extended-hypervisors')
             if ext_loaded:
                 fields += ('host_ip',)
             for field in fields:
                 hyp_dict[field] = hypervisor[field]
+            hyp_dict['running_vms'] = hypervisor['total_vms']
 
             hyp_dict['service'] = {
                 'id': service.id,
@@ -94,6 +95,7 @@ class HypervisorsController(object):
         compute_nodes = self.host_api.compute_node_get_all(context)
         req.cache_db_compute_nodes(compute_nodes)
         return dict(hypervisors=[self._view_hypervisor(
+                                 req,
                                  hyp,
                                  self.host_api.service_get_by_compute_host(
                                      context, hyp.host),
@@ -113,6 +115,7 @@ class HypervisorsController(object):
         compute_nodes = self.host_api.compute_node_get_all(context)
         req.cache_db_compute_nodes(compute_nodes)
         return dict(hypervisors=[self._view_hypervisor(
+                                 req,
                                  hyp,
                                  self.host_api.service_get_by_compute_host(
                                      context, hyp.host),
@@ -130,7 +133,7 @@ class HypervisorsController(object):
             raise webob.exc.HTTPNotFound(explanation=msg)
         service = self.host_api.service_get_by_compute_host(
             context, hyp.host)
-        return dict(hypervisor=self._view_hypervisor(hyp, service, True))
+        return dict(hypervisor=self._view_hypervisor(req, hyp, service, True))
 
     def uptime(self, req, id):
         context = req.environ['nova.context']
@@ -151,7 +154,7 @@ class HypervisorsController(object):
             raise webob.exc.HTTPNotImplemented(explanation=msg)
 
         service = self.host_api.service_get_by_compute_host(context, host)
-        return dict(hypervisor=self._view_hypervisor(hyp, service, False,
+        return dict(hypervisor=self._view_hypervisor(req, hyp, service, False,
                                                      uptime=uptime))
 
     def search(self, req, id):
@@ -168,6 +171,7 @@ class HypervisorsController(object):
                 context, id)
         if hypervisors:
             return dict(hypervisors=[self._view_hypervisor(
+                                     req,
                                      hyp,
                                      self.host_api.service_get_by_compute_host(
                                          context, hyp.host),
@@ -198,7 +202,7 @@ class HypervisorsController(object):
                     compute_node.host)
             service = self.host_api.service_get_by_compute_host(
                 context, compute_node.host)
-            hyp = self._view_hypervisor(compute_node, service, False,
+            hyp = self._view_hypervisor(req, compute_node, service, False,
                                         instances)
             hypervisors.append(hyp)
         return dict(hypervisors=hypervisors)
@@ -207,6 +211,8 @@ class HypervisorsController(object):
         context = req.environ['nova.context']
         authorize(context)
         stats = self.host_api.compute_node_statistics(context)
+        stats['running_vms'] = stats['total_vms']
+        del stats['total_vms']
         return dict(hypervisor_statistics=stats)
 
 

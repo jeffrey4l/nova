@@ -247,7 +247,7 @@ class BaseTestCase(test.TestCase):
             "free_disk_gb": 1,
             "current_workload": 1,
             "running_vms": 0,
-            "total_vms": 0,
+            "total_vms": 1,
             "cpu_info": None,
             "numa_topology": None,
             "stats": '{"num_instances": "1"}',
@@ -714,6 +714,7 @@ class TrackerTestCase(BaseTrackerTestCase):
         self._assert(0, 'local_gb_used')
         self._assert(0, 'vcpus_used')
         self._assert(0, 'running_vms')
+        self._assert(1, 'total_vms')
         self._assert(FAKE_VIRT_MEMORY_MB, 'free_ram_mb')
         self._assert(FAKE_VIRT_LOCAL_GB, 'free_disk_gb')
         self.assertFalse(self.tracker.disabled)
@@ -780,6 +781,7 @@ class TrackerPciStatsTestCase(BaseTrackerTestCase):
         self._assert(0, 'local_gb_used')
         self._assert(0, 'vcpus_used')
         self._assert(0, 'running_vms')
+        self._assert(1, 'total_vms')
         self._assert(FAKE_VIRT_MEMORY_MB, 'free_ram_mb')
         self._assert(FAKE_VIRT_LOCAL_GB, 'free_disk_gb')
         self.assertFalse(self.tracker.disabled)

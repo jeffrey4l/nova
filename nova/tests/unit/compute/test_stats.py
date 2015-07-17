@@ -126,6 +126,8 @@ class StatsTestCase(test.NoDBTestCase):
 
         self.stats.update_stats_for_instance(self._fake_object(instance))
 
+        self.assertEqual(2, self.stats.num_running_vms)
+
         self.assertEqual(4, self.stats.num_os_type("Linux"))
         self.assertEqual(1, self.stats.num_os_type("FreeBSD"))
 
@@ -152,22 +154,37 @@ class StatsTestCase(test.NoDBTestCase):
 
         self.stats.update_stats_for_instance(instance)  # no change
         self.assertEqual(1, self.stats.num_instances)
+        self.assertEqual(0, self.stats.num_running_vms)
         self.assertEqual(1, self.stats.num_instances_for_project("1234"))
         self.assertEqual(1, self.stats["num_os_type_Linux"])
         self.assertEqual(1, self.stats["num_task_None"])
         self.assertEqual(1, self.stats["num_vm_" + vm_states.BUILDING])
 
-    def test_update_stats_for_instance_vm_change(self):
+    def test_update_stats_for_instance_vm_change_pause(self):
         instance = self._create_instance()
         self.stats.update_stats_for_instance(instance)
 
         instance["vm_state"] = vm_states.PAUSED
         self.stats.update_stats_for_instance(instance)
         self.assertEqual(1, self.stats.num_instances)
+        self.assertEqual(0, self.stats.num_running_vms)
         self.assertEqual(1, self.stats.num_instances_for_project(1234))
         self.assertEqual(1, self.stats["num_os_type_Linux"])
         self.assertEqual(0, self.stats["num_vm_%s" % vm_states.BUILDING])
         self.assertEqual(1, self.stats["num_vm_%s" % vm_states.PAUSED])
+
+    def test_update_stats_for_instance_vm_change_active(self):
+        instance = self._create_instance()
+        self.stats.update_stats_for_instance(instance)
+
+        instance["vm_state"] = vm_states.ACTIVE
+        self.stats.update_stats_for_instance(instance)
+        self.assertEqual(1, self.stats.num_instances)
+        self.assertEqual(1, self.stats.num_running_vms)
+        self.assertEqual(1, self.stats.num_instances_for_project(1234))
+        self.assertEqual(1, self.stats["num_os_type_Linux"])
+        self.assertEqual(0, self.stats["num_vm_%s" % vm_states.BUILDING])
+        self.assertEqual(1, self.stats["num_vm_%s" % vm_states.ACTIVE])
 
     def test_update_stats_for_instance_task_change(self):
         instance = self._create_instance()
@@ -176,6 +193,7 @@ class StatsTestCase(test.NoDBTestCase):
         instance["task_state"] = task_states.REBUILDING
         self.stats.update_stats_for_instance(instance)
         self.assertEqual(1, self.stats.num_instances)
+        self.assertEqual(0, self.stats.num_running_vms)
         self.assertEqual(1, self.stats.num_instances_for_project("1234"))
         self.assertEqual(1, self.stats["num_os_type_Linux"])
         self.assertEqual(0, self.stats["num_task_None"])
@@ -190,6 +208,7 @@ class StatsTestCase(test.NoDBTestCase):
         self.stats.update_stats_for_instance(instance)
 
         self.assertEqual(0, self.stats.num_instances)
+        self.assertEqual(0, self.stats.num_running_vms)
         self.assertEqual(0, self.stats.num_instances_for_project("1234"))
         self.assertEqual(0, self.stats.num_os_type("Linux"))
         self.assertEqual(0, self.stats["num_vm_" + vm_states.BUILDING])

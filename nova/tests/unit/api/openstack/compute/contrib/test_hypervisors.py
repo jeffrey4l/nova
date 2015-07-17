@@ -18,6 +18,7 @@ import mock
 import netaddr
 from webob import exc
 
+from nova.api.openstack import api_version_request
 from nova.api.openstack.compute.contrib import hypervisors as hypervisors_v2
 from nova.api.openstack.compute.plugins.v3 import hypervisors \
     as hypervisors_v21
@@ -49,6 +50,7 @@ TEST_HYPERS = [
          free_disk_gb=125,
          current_workload=2,
          running_vms=2,
+         total_vms=3,
          cpu_info='cpu_info',
          disk_available_least=100,
          host_ip=netaddr.IPAddress('1.1.1.1')),
@@ -68,6 +70,7 @@ TEST_HYPERS = [
          free_disk_gb=125,
          current_workload=2,
          running_vms=2,
+         total_vms=3,
          cpu_info='cpu_info',
          disk_available_least=100,
          host_ip=netaddr.IPAddress('2.2.2.2'))]
@@ -138,6 +141,7 @@ def fake_compute_node_statistics(context):
         free_disk_gb=0,
         current_workload=0,
         running_vms=0,
+        total_vms=0,
         disk_available_least=0,
         )
 
@@ -171,6 +175,10 @@ class HypervisorsTestV21(test.NoDBTestCase):
     del DETAIL_HYPERS_DICTS[1]['service_id']
     del DETAIL_HYPERS_DICTS[0]['host']
     del DETAIL_HYPERS_DICTS[1]['host']
+    DETAIL_HYPERS_DICTS[0]['running_vms'] = DETAIL_HYPERS_DICTS[0]['total_vms']
+    DETAIL_HYPERS_DICTS[1]['running_vms'] = DETAIL_HYPERS_DICTS[1]['total_vms']
+    del DETAIL_HYPERS_DICTS[0]['total_vms']
+    del DETAIL_HYPERS_DICTS[1]['total_vms']
     DETAIL_HYPERS_DICTS[0].update({'state': 'up',
                            'status': 'enabled',
                            'service': dict(id=1, host='compute1',
@@ -212,18 +220,21 @@ class HypervisorsTestV21(test.NoDBTestCase):
 
     def test_view_hypervisor_nodetail_noservers(self):
         result = self.controller._view_hypervisor(
-            self.TEST_HYPERS_OBJ[0], self.TEST_SERVICES[0], False)
+            self._get_request(True), self.TEST_HYPERS_OBJ[0],
+            self.TEST_SERVICES[0], False)
 
         self.assertEqual(result, self.INDEX_HYPER_DICTS[0])
 
     def test_view_hypervisor_detail_noservers(self):
         result = self.controller._view_hypervisor(
-            self.TEST_HYPERS_OBJ[0], self.TEST_SERVICES[0], True)
+            self._get_request(True), self.TEST_HYPERS_OBJ[0],
+            self.TEST_SERVICES[0], True)
 
         self.assertEqual(result, self.DETAIL_HYPERS_DICTS[0])
 
     def test_view_hypervisor_servers(self):
-        result = self.controller._view_hypervisor(self.TEST_HYPERS_OBJ[0],
+        result = self.controller._view_hypervisor(self._get_request(True),
+                                                  self.TEST_HYPERS_OBJ[0],
                                                   self.TEST_SERVICES[0],
                                                   False, self.TEST_SERVERS)
         expected_dict = copy.deepcopy(self.INDEX_HYPER_DICTS[0])
@@ -268,7 +279,6 @@ class HypervisorsTestV21(test.NoDBTestCase):
     def test_show_withid(self):
         req = self._get_request(True)
         result = self.controller.show(req, self.TEST_HYPERS_OBJ[0].id)
-
         self.assertEqual(result, dict(hypervisor=self.DETAIL_HYPERS_DICTS[0]))
 
     def test_show_non_admin(self):
@@ -414,7 +424,7 @@ class HypervisorsTestV21(test.NoDBTestCase):
                     free_ram_mb=10 * 1024,
                     free_disk_gb=250,
                     current_workload=4,
-                    running_vms=4,
+                    running_vms=6,
                     disk_available_least=200)))
 
     def test_statistics_non_admin(self):
@@ -579,3 +589,44 @@ class CellHypervisorsTestV2(HypervisorsTestV2, CellHypervisorsTestV21):
 
     def setUp(self):
         super(CellHypervisorsTestV2, self).setUp()
+
+
+class HypervisorTestV27(HypervisorsTestV21):
+
+    DETAIL_HYPERS_DICTS = copy.deepcopy(TEST_HYPERS)
+    del DETAIL_HYPERS_DICTS[0]['service_id']
+    del DETAIL_HYPERS_DICTS[1]['service_id']
+    del DETAIL_HYPERS_DICTS[0]['host']
+    del DETAIL_HYPERS_DICTS[1]['host']
+    DETAIL_HYPERS_DICTS[0].update({'state': 'up',
+                           'status': 'enabled',
+                           'service': dict(id=1, host='compute1',
+                                        disabled_reason=None)})
+    DETAIL_HYPERS_DICTS[1].update({'state': 'up',
+                           'status': 'enabled',
+                           'service': dict(id=2, host='compute2',
+                                        disabled_reason=None)})
+
+    def _get_request(self, use_admin_context):
+        req = fakes.HTTPRequest.blank('', use_admin_context=use_admin_context)
+        req.api_version_request = api_version_request.APIVersionRequest('2.7')
+        return req
+
+    def test_statistics(self):
+        req = self._get_request(True)
+        result = self.controller.statistics(req)
+
+        self.assertEqual(result, dict(hypervisor_statistics=dict(
+                    count=2,
+                    vcpus=8,
+                    memory_mb=20 * 1024,
+                    local_gb=500,
+                    vcpus_used=4,
+                    memory_mb_used=10 * 1024,
+                    local_gb_used=250,
+                    free_ram_mb=10 * 1024,
+                    free_disk_gb=250,
+                    current_workload=4,
+                    running_vms=4,
+                    total_vms=6,
+                    disk_available_least=200)))

@@ -16,6 +16,7 @@ import copy
 
 import mock
 
+from nova.api.openstack import api_version_request
 from nova.api.openstack.compute.contrib import hypervisors as hypervisors_v2
 from nova.api.openstack.compute.plugins.v3 import hypervisors \
     as hypervisors_v21
@@ -51,6 +52,10 @@ class ExtendedHypervisorsTestV21(test.NoDBTestCase):
     del DETAIL_HYPERS_DICTS[1]['service_id']
     del DETAIL_HYPERS_DICTS[0]['host']
     del DETAIL_HYPERS_DICTS[1]['host']
+    DETAIL_HYPERS_DICTS[0]['running_vms'] = DETAIL_HYPERS_DICTS[0]['total_vms']
+    DETAIL_HYPERS_DICTS[1]['running_vms'] = DETAIL_HYPERS_DICTS[1]['total_vms']
+    del DETAIL_HYPERS_DICTS[0]['total_vms']
+    del DETAIL_HYPERS_DICTS[1]['total_vms']
     DETAIL_HYPERS_DICTS[0].update({'state': 'up',
                            'status': 'enabled',
                            'service': dict(id=1, host='compute1',
@@ -82,6 +87,7 @@ class ExtendedHypervisorsTestV21(test.NoDBTestCase):
 
     def test_view_hypervisor_detail_noservers(self):
         result = self.controller._view_hypervisor(
+            self._get_request(),
             test_hypervisors.TEST_HYPERS_OBJ[0],
             test_hypervisors.TEST_SERVICES[0], True)
 
@@ -106,6 +112,10 @@ class ExtendedHypervisorsTestV2(ExtendedHypervisorsTestV21):
     del DETAIL_HYPERS_DICTS[1]['service_id']
     del DETAIL_HYPERS_DICTS[0]['host']
     del DETAIL_HYPERS_DICTS[1]['host']
+    DETAIL_HYPERS_DICTS[0]['running_vms'] = DETAIL_HYPERS_DICTS[0]['total_vms']
+    DETAIL_HYPERS_DICTS[1]['running_vms'] = DETAIL_HYPERS_DICTS[1]['total_vms']
+    del DETAIL_HYPERS_DICTS[0]['total_vms']
+    del DETAIL_HYPERS_DICTS[1]['total_vms']
     DETAIL_HYPERS_DICTS[0].update({'service': dict(id=1, host='compute1')})
     DETAIL_HYPERS_DICTS[1].update({'service': dict(id=2, host='compute2')})
 
@@ -114,3 +124,25 @@ class ExtendedHypervisorsTestV2(ExtendedHypervisorsTestV21):
         self.ext_mgr.extensions = {}
         self.ext_mgr.extensions['os-extended-hypervisors'] = True
         self.controller = hypervisors_v2.HypervisorsController(self.ext_mgr)
+
+
+class ExtendedHypervisorsTestV27(ExtendedHypervisorsTestV21):
+    DETAIL_HYPERS_DICTS = copy.deepcopy(test_hypervisors.TEST_HYPERS)
+    del DETAIL_HYPERS_DICTS[0]['service_id']
+    del DETAIL_HYPERS_DICTS[1]['service_id']
+    del DETAIL_HYPERS_DICTS[0]['host']
+    del DETAIL_HYPERS_DICTS[1]['host']
+    DETAIL_HYPERS_DICTS[0].update({'state': 'up',
+                           'status': 'enabled',
+                           'service': dict(id=1, host='compute1',
+                                        disabled_reason=None)})
+    DETAIL_HYPERS_DICTS[1].update({'state': 'up',
+                           'status': 'enabled',
+                           'service': dict(id=2, host='compute2',
+                                        disabled_reason=None)})
+
+    def _get_request(self):
+        req = fakes.HTTPRequest.blank('/v2/fake/os-hypervisors/detail',
+                                       use_admin_context=True)
+        req.api_version_request = api_version_request.APIVersionRequest('2.7')
+        return req

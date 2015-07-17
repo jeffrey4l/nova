@@ -611,7 +611,8 @@ class ResourceTracker(object):
         self.compute_node.free_disk_gb = (self.compute_node.local_gb -
                                           self.compute_node.local_gb_used)
 
-        self.compute_node.running_vms = self.stats.num_instances
+        self.compute_node.running_vms = self.stats.num_running_vms
+        self.compute_node.total_vms = self.stats.num_instances
         self.ext_resources_handler.update_from_instance(usage, sign)
 
         # Calculate the numa usage
