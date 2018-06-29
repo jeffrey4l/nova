@@ -262,11 +262,17 @@ class BaseTestCase(test.TestCase):
         # Just to make long lines short
         self.rt = self.compute.rt
 
-        self.mock_get_allocs = self.useFixture(
+        self.mock_get_allocations = self.useFixture(
             fixtures.fixtures.MockPatch(
                 'nova.scheduler.client.report.SchedulerReportClient.'
                 'get_allocations_for_consumer')).mock
-        self.mock_get_allocs.return_value = {}
+        self.mock_get_allocations.return_value = {}
+
+        self.mock_get_allocs = self.useFixture(
+            fixtures.fixtures.MockPatch(
+                'nova.scheduler.client.report.SchedulerReportClient.'
+                'get_allocs_for_consumer')).mock
+        self.mock_get_allocs.return_value = {'allocations': {}}
 
     def tearDown(self):
         ctxt = context.get_admin_context()
@@ -4893,7 +4899,7 @@ class ComputeTestCase(BaseTestCase,
             # which makes this a resize
             mock_virt_mig.assert_called_once_with(self.context, migration,
                 instance, disk_info, 'fake-nwinfo1',
-                test.MatchType(objects.ImageMeta), resize_instance,
+                test.MatchType(objects.ImageMeta), resize_instance, mock.ANY,
                 'fake-bdminfo', power_on)
             mock_get_blk.assert_called_once_with(self.context, instance,
                                                  refresh_conn_info=True,
@@ -4908,6 +4914,8 @@ class ComputeTestCase(BaseTestCase,
                 mock_get_vol_connector.return_value, '/dev/vdb')
             mock_attachment_complete.assert_called_once_with(
                 self.context, uuids.attachment_id)
+            self.mock_get_allocs.assert_called_once_with(self.context,
+                                                         instance.uuid)
 
     def test_finish_resize_from_active(self):
         self._test_finish_resize(power_on=True)
@@ -12836,7 +12844,8 @@ class EvacuateHostTestCase(BaseTestCase):
                 ctxt, self.inst, self.inst.host)
             mock_setup_instance_network_on_host.assert_called_once_with(
                 ctxt, self.inst, self.inst.host, migration)
-            self.mock_get_allocs.assert_called_once_with(ctxt, self.inst.uuid)
+            self.mock_get_allocations.assert_called_once_with(ctxt,
+                                                              self.inst.uuid)
 
         _test_rebuild(vm_is_stopped=vm_states_is_stopped)
 
@@ -13178,8 +13187,8 @@ class ComputeInjectedFilesTestCase(BaseTestCase):
                admin_password, allocations, nw_info, block_device_info,
                db_api=None):
         self.assertEqual(self.expected, injected_files)
-        self.assertEqual(self.mock_get_allocs.return_value, allocations)
-        self.mock_get_allocs.assert_called_once_with(instance.uuid)
+        self.assertEqual(self.mock_get_allocations.return_value, allocations)
+        self.mock_get_allocations.assert_called_once_with(instance.uuid)
 
     def _test(self, injected_files, decoded_files):
         self.expected = decoded_files

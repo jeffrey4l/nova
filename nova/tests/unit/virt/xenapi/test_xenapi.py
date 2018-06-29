@@ -1936,7 +1936,8 @@ class XenAPIMigrateInstance(stubs.XenAPITestBase):
         conn.finish_migration(self.context, self.migration, instance,
                               dict(base_copy=base_uuid, cow=cow_uuid),
                               network_info, image_meta, resize_instance=True,
-                              block_device_info=None, power_on=power_on)
+                              allocations={}, block_device_info=None,
+                              power_on=power_on)
         self.assertTrue(self.called)
         self.assertEqual(self.fake_vm_start_called, power_on)
 
@@ -1977,7 +1978,8 @@ class XenAPIMigrateInstance(stubs.XenAPITestBase):
         conn.finish_migration(self.context, self.migration, instance,
                               dict(base_copy='hurr', cow='durr'),
                               network_info, image_meta, resize_instance=True,
-                              block_device_info=None, power_on=power_on)
+                              allocations={}, block_device_info=None,
+                              power_on=power_on)
         self.assertTrue(self.called)
         self.assertEqual(self.fake_vm_start_called, power_on)
 
@@ -2007,7 +2009,8 @@ class XenAPIMigrateInstance(stubs.XenAPITestBase):
             {'id': instance['image_ref'], 'disk_format': 'vhd'})
         conn.finish_migration(self.context, self.migration, instance,
                               dict(base_copy='hurr', cow='durr'),
-                              network_info, image_meta, resize_instance=True)
+                              network_info, image_meta, resize_instance=True,
+                              allocations={})
 
     def test_finish_migrate_no_resize_vdi(self):
         instance = create_instance_with_system_metadata(self.context,
@@ -2026,7 +2029,8 @@ class XenAPIMigrateInstance(stubs.XenAPITestBase):
             {'id': instance['image_ref'], 'disk_format': 'vhd'})
         conn.finish_migration(self.context, self.migration, instance,
                               dict(base_copy='hurr', cow='durr'),
-                              network_info, image_meta, resize_instance=False)
+                              network_info, image_meta, resize_instance=False,
+                              allocations={})
 
     @stub_vm_utils_with_vdi_attached
     def test_migrate_too_many_partitions_no_resize_down(self):
