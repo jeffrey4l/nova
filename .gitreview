@@ -1,5 +1,5 @@
 [gerrit]
-host=review.opendev.org
+host=review.sh.99cloud.net
 port=29418
-project=openstack/nova.git
+project=nokia/nova.git
 defaultbranch=stable/train
