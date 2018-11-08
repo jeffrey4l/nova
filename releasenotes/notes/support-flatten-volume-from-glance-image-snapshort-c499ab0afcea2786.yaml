@@ -1,0 +1,6 @@
+---
+features:
+  - |
+    When using ceph and `CONF.libvirt.rbd_flatten_volume_from_image` option is
+    true, the image cloned from glance pool will be flattened for higher
+    availability.
