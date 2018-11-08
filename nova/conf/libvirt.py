@@ -834,6 +834,9 @@ Requires:
 * Qemu >= 1.5 (raw format)
 * Qemu >= 1.6 (qcow2 format)
 """),
+    cfg.BoolOpt('rbd_flatten_volume_from_image',
+                default=False,
+                help='Flatten the volume clone from image snapshot'),
 ]
 
 libvirt_imagecache_opts = [

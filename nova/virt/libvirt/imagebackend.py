@@ -923,7 +923,11 @@ class Rbd(Image):
         for location in locations:
             if self.driver.is_cloneable(location, image_meta):
                 LOG.debug('Selected location: %(loc)s', {'loc': location})
-                return self.driver.clone(location, self.rbd_name)
+                self.driver.clone(location, self.rbd_name)
+                if CONF.libvirt.rbd_flatten_volume_from_image:
+                    LOG.debug('Image %(image)s is flatten',
+                              {'image': self.rbd_name})
+                    self.driver.flatten(self.rbd_name)
 
         reason = _('No image locations are accessible')
         raise exception.ImageUnacceptable(image_id=image_id_or_uri,
