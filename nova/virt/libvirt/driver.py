@@ -789,8 +789,7 @@ class LibvirtDriver(driver.ComputeDriver):
             cpu.add_feature(vconfig.LibvirtConfigCPUFeature(flag))
             try:
                 self._compare_cpu(cpu, self._get_cpu_info(), None)
-            except (exception.InvalidCPUInfo,
-                    exception.MigrationPreCheckError) as e:
+            except exception.InvalidCPUInfo as e:
                 msg = (_("Configured extra flag: %(flag)s it not correct, or "
                          "the host CPU does not support this flag. Please "
                          "correct the config and try again. %(e)s") % {
@@ -8138,11 +8137,14 @@ class LibvirtDriver(driver.ComputeDriver):
             (disk_available_gb * units.Ki) - CONF.reserved_host_disk_mb)
 
         # Compare CPU
-        if not instance.vcpu_model or not instance.vcpu_model.model:
-            source_cpu_info = src_compute_info['cpu_info']
-            self._compare_cpu(None, source_cpu_info, instance)
-        else:
-            self._compare_cpu(instance.vcpu_model, None, instance)
+        try:
+            if not instance.vcpu_model or not instance.vcpu_model.model:
+                source_cpu_info = src_compute_info['cpu_info']
+                self._compare_cpu(None, source_cpu_info, instance)
+            else:
+                self._compare_cpu(instance.vcpu_model, None, instance)
+        except exception.InvalidCPUInfo as e:
+            raise exception.MigrationPreCheckError(reason=e)
 
         # Create file on storage, to be checked on source host
         filename = self._create_shared_storage_test_file(instance)
@@ -8468,7 +8470,7 @@ class LibvirtDriver(driver.ComputeDriver):
                 return
             else:
                 LOG.error(m, {'ret': e, 'u': u})
-                raise exception.MigrationPreCheckError(
+                raise exception.InvalidCPUInfo(
                     reason=m % {'ret': e, 'u': u})
 
         if ret <= 0:
