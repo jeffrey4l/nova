@@ -194,7 +194,15 @@ flavor/image. If an aggregate is configured with a property with key
 and/or image metadata must also contain ``trait:$TRAIT_NAME=required`` to be
 eligible to be scheduled to hosts in that aggregate. More technical details
 at https://docs.openstack.org/nova/latest/reference/isolate-aggregates.html
-""")
+"""),
+    cfg.IntOpt("sync_vgpu_node_cache_interval",
+               default=3600,
+               help="""
+Periodic task interval.
+
+This value controls how often (in seconds) to run periodic task of sync vgpu
+node cache.
+               """),
 ]
 
 filter_scheduler_group = cfg.OptGroup(name="filter_scheduler",

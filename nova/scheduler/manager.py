@@ -258,3 +258,10 @@ class SchedulerManager(manager.Manager):
         """
         self.driver.host_manager.sync_instance_info(context, host_name,
                                                     instance_uuids)
+
+    @periodic_task.periodic_task(
+        spacing=CONF.scheduler.sync_vgpu_node_cache_interval,
+        run_immediately=True)
+    def sync_vgpu_node_cache(self, context):
+        """Periodic sync the vgpu node's cache"""
+        self.driver.sync_vgpu_node_cache(context)
