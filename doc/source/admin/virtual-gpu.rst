@@ -291,10 +291,12 @@ For libvirt:
   allocate those vGPUs to the instance (the instance is created without
   vGPU resources). The proposed workaround is to rebuild the instance after
   resizing it. The rebuild operation allocates vGPUS to the instance.
+  This has been resolved in the Ussuri release. See `bug 1778563`_.
 
 * Cold migrating an instance to another host will have the same problem as
   resize. If you want to migrate an instance, make sure to rebuild it after the
   migration.
+  This has been resolved in the Ussuri release. See `bug 1778563`_.
 
 * Rescue images do not use vGPUs. An instance being rescued does not keep its
   vGPUs during rescue. During that time, another instance can receive those
@@ -302,7 +304,9 @@ For libvirt:
   instance immediately after rescue. However, rebuilding the rescued instance
   only helps if there are other free vGPUs on the host.
 
-  .. note:: This has been resolved in the Rocky release [#]_.
+  .. versionchanged:: 18.0.0
+
+     This has been resolved in the Rocky release. See `bug 1762688`_.
 
 For XenServer:
 
@@ -324,7 +328,10 @@ For XenServer:
   resize. If you want to migrate an instance, make sure to rebuild it after the
   migration.
 
-.. [#] https://bugs.launchpad.net/nova/+bug/1762688
+* Multiple GPU types per compute is not supported by the XenServer driver.
+
+.. _bug 1778563: https://bugs.launchpad.net/nova/+bug/1778563
+.. _bug 1762688: https://bugs.launchpad.net/nova/+bug/1762688
 
 .. Links
 .. _Intel GVT-g: https://01.org/igvt-g

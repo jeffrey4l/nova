@@ -376,6 +376,218 @@ class InstanceHelperMixin(object):
 
         self.fail('The line "%(log_line)s" did not appear in the log')
 
+    def _wait_for_assert(self, assert_func, max_retries=10, sleep=0.5):
+        """Waits and retries the assert_func either until it does not raise
+        AssertionError any more or until the max_retries run out.
+        """
+        last_error = None
+        for i in range(max_retries):
+            try:
+                return assert_func()
+            except AssertionError as e:
+                last_error = e
+
+            time.sleep(sleep)
+
+        raise last_error
+
+    def _create_aggregate(self, name, availability_zone=None):
+        """Creates a host aggregate with the given name and optional AZ
+
+        :param name: The name of the host aggregate
+        :param availability_zone: Optional availability zone that the aggregate
+            represents
+        :returns: The id value of the created aggregate
+        """
+        api = getattr(self, 'admin_api', self.api)
+        body = {
+            'aggregate': {
+                'name': name, 'availability_zone': availability_zone
+            }
+        }
+        return api.post_aggregate(body)['id']
+
+    def _build_flavor(self, id=None, name=None, memory_mb=2048, vcpu=2,
+                      disk=10, ephemeral=10, swap=0, rxtx_factor=1.0,
+                      is_public=True):
+        """Build a request for the flavor create API.
+
+        :param id: An ID for the flavor.
+        :param name: A name for the flavor.
+        :param memory_mb: The flavor memory.
+        :param vcpu: The flavor vcpus.
+        :param disk: The flavor disk.
+        :param ephemeral: The flavor ephemeral.
+        :param swap: The flavor swap.
+        :param rxtx_factor: (DEPRECATED) The flavor RX-TX factor.
+        :param is_public: Whether the flavor is public or not.
+        :returns: The generated request body.
+        """
+        if not name:
+            name = ''.join(
+                random.choice(string.ascii_lowercase) for i in range(20))
+
+        return {
+            "flavor": {
+                "id": id,
+                "name": name,
+                "ram": memory_mb,
+                "vcpus": vcpu,
+                "disk": disk,
+                "OS-FLV-EXT-DATA:ephemeral": ephemeral,
+                "swap": swap,
+                "rxtx_factor": rxtx_factor,
+                "os-flavor-access:is_public": is_public,
+            }
+        }
+
+    def _create_flavor(self, id=None, name=None, memory_mb=2048, vcpu=2,
+                       disk=10, ephemeral=10, swap=0, rxtx_factor=1.0,
+                       is_public=True, extra_spec=None):
+        """Build and submit a request to the flavor create API.
+
+        :param id: An ID for the flavor.
+        :param name: A name for the flavor.
+        :param memory_mb: The flavor memory.
+        :param vcpu: The flavor vcpus.
+        :param disk: The flavor disk.
+        :param ephemeral: The flavor ephemeral.
+        :param swap: The flavor swap.
+        :param rxtx_factor: (DEPRECATED) The flavor RX-TX factor.
+        :param is_public: Whether the flavor is public or not.
+        :returns: The ID of the created flavor.
+        """
+        body = self._build_flavor(
+            id, name, memory_mb, vcpu, disk, ephemeral, swap, rxtx_factor,
+            is_public)
+        flavor = self.api_fixture.admin_api.post_flavor(body)
+
+        if extra_spec is not None:
+            spec = {"extra_specs": extra_spec}
+            self.api_fixture.admin_api.post_extra_spec(flavor['id'], spec)
+
+        return flavor['id']
+
+    def _build_server(self, name=None, image_uuid=None, flavor_id=None,
+                      networks=None, az=None, host=None):
+        """Build a request for the server create API.
+
+        :param name: A name for the server.
+        :param image_uuid: The ID of an existing image.
+        :param flavor_id: The ID of an existing flavor.
+        :param networks: A dict of networks to attach or a string of 'none' or
+            'auto'.
+        :param az: The name of the availability zone the instance should
+            request.
+        :param host: The host to boot the instance on. Requires API
+            microversion 2.74 or greater.
+        :returns: The generated request body.
+        """
+        if not name:
+            name = ''.join(
+                random.choice(string.ascii_lowercase) for i in range(20))
+
+        if image_uuid is None:  # we need to handle ''
+            # NOTE(takashin): In API version 2.36, image APIs were deprecated.
+            # In API version 2.36 or greater, self.api.get_images() returns
+            # a 404 error. In that case, 'image_uuid' should be specified.
+            with utils.temporary_mutation(self.api, microversion='2.35'):
+                image_uuid = self.api.get_images()[0]['id']
+
+        if not flavor_id:
+            # Set a valid flavorId
+            flavor_id = self.api.get_flavors()[0]['id']
+
+        server = {
+            'name': name,
+            'imageRef': image_uuid,
+            'flavorRef': 'http://fake.server/%s' % flavor_id,
+        }
+
+        if networks is not None:
+            server['networks'] = networks
+
+        if az is not None:
+            server['availability_zone'] = az
+
+        # This requires at least microversion 2.74 to work
+        if host is not None:
+            server['host'] = host
+
+        return server
+
+    def _create_server(self, name=None, image_uuid=None, flavor_id=None,
+                       networks=None, az=None, host=None,
+                       expected_state='ACTIVE', api=None):
+        """Build and submit a request to the server create API.
+
+        :param name: A name for the server.
+        :param image_uuid: The ID of an existing image.
+        :param flavor_id: The ID of an existing flavor.
+        :param networks: A dict of networks to attach or a string of 'none' or
+            'auto'.
+        :param az: The name of the availability zone the instance should
+            request.
+        :param host: The host to boot the instance on. Requires API
+            microversion 2.74 or greater.
+        :param expected_state: The expected end state.
+        :param api: An API client to create the server with; defaults to
+            'self.api'
+        :returns: The response from the API containing the created server.
+        """
+        # if forcing the server onto a host, we have to use the admin API
+        if not api:
+            api = self.api if not az else getattr(self, 'admin_api', self.api)
+
+        body = self._build_server(
+            name, image_uuid, flavor_id, networks, az, host)
+
+        server = api.post_server({'server': body})
+
+        return self._wait_for_state_change(server, expected_state)
+
+    def _delete_server(self, server):
+        """Delete a server."""
+        self.api.delete_server(server['id'])
+        self._wait_until_deleted(server)
+
+    def _confirm_resize(self, server):
+        self.api.post_server_action(server['id'], {'confirmResize': None})
+        server = self._wait_for_state_change(server, 'ACTIVE')
+        self._wait_for_instance_action_event(
+            server, instance_actions.CONFIRM_RESIZE,
+            'compute_confirm_resize', 'success')
+        return server
+
+    def _revert_resize(self, server):
+        # NOTE(sbauza): This method requires the caller to setup a fake
+        # notifier by stubbing it.
+        self.api.post_server_action(server['id'], {'revertResize': None})
+        server = self._wait_for_state_change(server, 'ACTIVE')
+        self._wait_for_migration_status(server, ['reverted'])
+        # Note that the migration status is changed to "reverted" in the
+        # dest host revert_resize method but the allocations are cleaned up
+        # in the source host finish_revert_resize method so we need to wait
+        # for the finish_revert_resize method to complete.
+        fake_notifier.wait_for_versioned_notifications(
+            'instance.resize_revert.end')
+        return server
+
+    def _migrate_or_resize(self, server, request):
+        if not ('resize' in request or 'migrate' in request):
+            raise Exception('_migrate_or_resize only supports resize or '
+                            'migrate requests.')
+        self.api.post_server_action(server['id'], request)
+        self._wait_for_state_change(server, 'VERIFY_RESIZE')
+
+    def _resize_server(self, server, new_flavor):
+        resize_req = {
+            'resize': {
+                'flavorRef': new_flavor
+            }
+        }
+        self._migrate_or_resize(server, resize_req)
+
 
 class ProviderUsageBaseTestCase(test.TestCase, InstanceHelperMixin):
     """Base test class for functional tests that check provider usage
@@ -804,8 +1016,7 @@ class ProviderUsageBaseTestCase(test.TestCase, InstanceHelperMixin):
 
     def _move_and_check_allocations(self, server, request, old_flavor,
                                     new_flavor, source_rp_uuid, dest_rp_uuid):
-        self.api.post_server_action(server['id'], request)
-        self._wait_for_state_change(self.api, server, 'VERIFY_RESIZE')
+        self._migrate_or_resize(server, request)
 
         def _check_allocation():
             self.assertFlavorMatchesUsage(source_rp_uuid, old_flavor)
@@ -861,14 +1072,7 @@ class ProviderUsageBaseTestCase(test.TestCase, InstanceHelperMixin):
         # Resize the server to the same host and check usages in VERIFY_RESIZE
         # state
         self.flags(allow_resize_to_same_host=True)
-        resize_req = {
-            'resize': {
-                'flavorRef': new_flavor['id']
-            }
-        }
-        self.api.post_server_action(server['id'], resize_req)
-        self._wait_for_state_change(self.api, server, 'VERIFY_RESIZE')
-
+        self._resize_server(server, new_flavor['id'])
         self.assertFlavorMatchesUsage(rp_uuid, old_flavor, new_flavor)
 
         # The instance should hold a new_flavor allocation
@@ -934,23 +1138,3 @@ class ProviderUsageBaseTestCase(test.TestCase, InstanceHelperMixin):
         # Account for reserved_host_cpus.
         expected_vcpu_usage = CONF.reserved_host_cpus + flavor['vcpus']
         self.assertEqual(expected_vcpu_usage, hypervisor['vcpus_used'])
-
-    def _confirm_resize(self, server):
-        self.api.post_server_action(server['id'], {'confirmResize': None})
-        server = self._wait_for_state_change(self.api, server, 'ACTIVE')
-        self._wait_for_instance_action_event(
-            self.api, server, instance_actions.CONFIRM_RESIZE,
-            'compute_confirm_resize', 'success')
-        return server
-
-    def _revert_resize(self, server):
-        self.api.post_server_action(server['id'], {'revertResize': None})
-        server = self._wait_for_state_change(self.api, server, 'ACTIVE')
-        self._wait_for_migration_status(server, ['reverted'])
-        # Note that the migration status is changed to "reverted" in the
-        # dest host revert_resize method but the allocations are cleaned up
-        # in the source host finish_revert_resize method so we need to wait
-        # for the finish_revert_resize method to complete.
-        fake_notifier.wait_for_versioned_notifications(
-            'instance.resize_revert.end')
-        return server
