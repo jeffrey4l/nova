@@ -26,6 +26,7 @@ import inspect
 import os
 import random
 import re
+import requests
 import shutil
 import tempfile
 
@@ -1171,3 +1172,13 @@ def normalize_rc_name(rc_name):
     norm_name = norm_name.upper()
     norm_name = orc.CUSTOM_NAMESPACE + norm_name
     return norm_name
+
+
+def send_request(method, endpoint, url, headers=None, params=None, data=None):
+    full_url = endpoint + url
+    requests.session().keep_alive = False
+    requests.adapters.DEFAULT_RETRIES = 5
+    response = requests.request(
+        method, full_url, headers=headers,
+        params=params, data=data, timeout=3)
+    return response

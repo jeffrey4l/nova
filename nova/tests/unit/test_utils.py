@@ -33,6 +33,7 @@ from oslo_context import fixture as context_fixture
 from oslo_utils import encodeutils
 from oslo_utils import fixture as utils_fixture
 from oslo_utils import units
+import requests_mock
 import six
 
 from nova import context
@@ -1363,3 +1364,12 @@ class TestGetSDKAdapter(test.NoDBTestCase):
         self.mock_get_confgrp.assert_called_once_with(self.service_type)
         self.mock_connection.assert_not_called()
         self.mock_get_auth_sess.assert_not_called()
+
+
+class RequestTestCase(test.NoDBTestCase):
+
+    @requests_mock.mock()
+    def test_send_request(self, req_m):
+        req_m.get('http://test.com/test', text='resp')
+        resp = utils.send_request('GET', 'http://test.com', '/test')
+        self.assertEqual('resp', resp.text)

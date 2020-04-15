@@ -407,12 +407,30 @@ so if your hypervisor does not support password injection, set this to False.
 """)
 ]
 
+animbus_horizon_opts = [
+    cfg.StrOpt(
+        'animbus_horizon_endpoint',
+        default='',
+        help='The animbus horizon API endpoint.'),
+    cfg.IntOpt(
+        "watchdog_start_error_time",
+        default=-1,
+        help="""
+The default watchdog start error time.
+
+if set -1 means turn off the watchdog function.
+if set 0 means get watchdog error time from front.
+if set more than 0 means use this value.
+""")
+]
+
 API_OPTS = (auth_opts +
             metadata_opts +
             file_opts +
             osapi_opts +
             os_network_opts +
-            enable_inst_pw_opts)
+            enable_inst_pw_opts +
+            animbus_horizon_opts)
 
 
 def register_opts(conf):

@@ -216,7 +216,8 @@ class _VirtDriverTestCase(_FakeDriverBackendTestCase):
         return instance_ref, network_info
 
     @catch_notimplementederror
-    def test_init_host(self):
+    @mock.patch('nova.utils.spawn')
+    def test_init_host(self, _):
         self.connection.init_host('myhostname')
 
     @catch_notimplementederror
@@ -901,12 +902,14 @@ class LibvirtConnTestCase(_VirtDriverTestCase, test.TestCase):
         self.stub_out('os_vif.unplug', lambda a, kw: None)
         self.stub_out('nova.compute.utils.get_machine_ips', lambda: [])
 
-    def test_init_host_image_type_rbd_force_raw_images_true(self):
+    @mock.patch('nova.virt.libvirt.host.Host.watchdog_event_handler')
+    def test_init_host_image_type_rbd_force_raw_images_true(self, _):
         CONF.set_override('images_type', 'rbd', group='libvirt')
         CONF.set_override('force_raw_images', True)
         self.connection.init_host('myhostname')
 
-    def test_init_host_image_type_non_rbd(self):
+    @mock.patch('nova.virt.libvirt.host.Host.watchdog_event_handler')
+    def test_init_host_image_type_non_rbd(self, _):
         CONF.set_override('images_type', 'default', group='libvirt')
         self.connection.init_host('myhostname')
 

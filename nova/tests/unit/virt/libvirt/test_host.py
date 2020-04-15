@@ -21,6 +21,7 @@ from eventlet import greenthread
 from eventlet import tpool
 import mock
 from oslo_utils.fixture import uuidsentinel as uuids
+from oslo_utils import timeutils
 from oslo_utils import uuidutils
 import six
 from six.moves import builtins
@@ -48,10 +49,12 @@ class StringMatcher(object):
 
 class FakeVirtDomain(object):
 
-    def __init__(self, id=-1, name=None):
+    def __init__(self, id=-1, name=None, fake_xml=None):
         self._id = id
         self._name = name
         self._uuid = uuidutils.generate_uuid()
+        if fake_xml:
+            self._fake_dom_xml = fake_xml
 
     def name(self):
         return self._name
@@ -61,6 +64,9 @@ class FakeVirtDomain(object):
 
     def UUIDString(self):
         return self._uuid
+
+    def XMLDesc(self, flags):
+        return self._fake_dom_xml
 
 
 class HostTestCase(test.NoDBTestCase):
@@ -268,6 +274,36 @@ class HostTestCase(test.NoDBTestCase):
         find_job_type.assert_called_once_with(
             test.MatchType(libvirt_guest.Guest), instance=None,
             logging_ok=False)
+
+    def test_event_watchdog(self):
+
+        hostimpl = host.Host("qemu:///system")
+        conn = hostimpl.get_connection()
+
+        hostimpl._init_events_pipe()
+        fake_dom_xml = """
+                <domain type='kvm'>
+                  <uuid>cef19ce0-0ca2-11df-855d-b19fbce37686</uuid>
+                  <devices>
+                    <disk type='file'>
+                      <source file='filename'/>
+                    </disk>
+                  </devices>
+                </domain>
+            """
+        dom = fakelibvirt.Domain(conn,
+                                 fake_dom_xml,
+                                 False)
+
+        hostimpl._event_watchdog_callback(
+            conn, dom, fakelibvirt.VIR_DOMAIN_EVENT_WATCHDOG_DEBUG, hostimpl)
+        hostimpl._dispatch_events()
+        self.assertEqual(hostimpl.vms_watchdog_last.keys()[0],
+                         'cef19ce0-0ca2-11df-855d-b19fbce37686')
+        self.assertEqual(
+            hostimpl.vms_watchdog_last[
+                'cef19ce0-0ca2-11df-855d-b19fbce37686'].date(),
+            timeutils.utcnow().date())
 
     def test_event_emit_delayed_call_delayed(self):
         ev = event.LifecycleEvent(

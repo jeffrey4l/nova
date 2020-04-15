@@ -746,6 +746,8 @@ class LibvirtDriver(driver.ComputeDriver):
 
         self._check_cpu_compatibility()
 
+        utils.spawn(self._host.watchdog_event_handler)
+
     def _check_cpu_compatibility(self):
         mode = CONF.libvirt.cpu_mode
         models = CONF.libvirt.cpu_models

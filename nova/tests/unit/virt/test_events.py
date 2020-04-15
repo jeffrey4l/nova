@@ -24,6 +24,7 @@ class TestEvents(test.NoDBTestCase):
         t = time.time()
         uuid = '1234'
         lifecycle = event.EVENT_LIFECYCLE_RESUMED
+        watchdog_event = event.EVENT_WATCHDOG_DEBUG
 
         e = event.Event(t)
         self.assertEqual(str(e), "<Event: %s>" % t)
@@ -33,4 +34,9 @@ class TestEvents(test.NoDBTestCase):
 
         e = event.LifecycleEvent(uuid, lifecycle, timestamp=t)
         self.assertEqual(str(e), "<LifecycleEvent: %s, %s => Resumed>" %
+                         (t, uuid))
+
+        e = event.WatchDogEvent(uuid, watchdog_event, timestamp=t)
+        self.assertEqual(str(e),
+                         "<WatchDogEvent: WatchDog-%s, %s => debug>" %
                          (t, uuid))

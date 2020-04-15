@@ -28,6 +28,7 @@ the other libvirt related classes
 """
 
 from collections import defaultdict
+import datetime
 import inspect
 import operator
 import os
@@ -44,6 +45,7 @@ from oslo_log import log as logging
 from oslo_utils import encodeutils
 from oslo_utils import excutils
 from oslo_utils import importutils
+from oslo_utils import timeutils
 from oslo_utils import units
 from oslo_utils import versionutils
 import six
@@ -60,6 +62,8 @@ from nova.virt.libvirt import config as vconfig
 from nova.virt.libvirt import guest as libvirt_guest
 from nova.virt.libvirt import migration as libvirt_migrate
 from nova.virt.libvirt import utils as libvirt_utils
+
+import xml.etree.cElementTree as ET
 
 libvirt = None
 
@@ -78,6 +82,8 @@ HV_DRIVER_QEMU = "QEMU"
 HV_DRIVER_XEN = "Xen"
 
 SEV_KERNEL_PARAM_FILE = '/sys/module/kvm_amd/parameters/sev'
+
+WATCHDOG_HANDLER_SLEEP_TIME = 5
 
 
 class Host(object):
@@ -121,6 +127,72 @@ class Host(object):
         self._supports_amd_sev = None
 
         self._has_hyperthreading = None
+        self.vms_watchdog_last = {}
+        self.start_error_time = None
+
+    def watchdog_event_handler(self):
+        LOG.debug("Watchdog event handler started")
+        while True:
+            try:
+                self._set_watchdog_start_error_time()
+                if self.start_error_time:
+                    self._watchdog_event_handler()
+            except Exception as e:
+                LOG.warning(e)
+            greenthread.sleep(WATCHDOG_HANDLER_SLEEP_TIME)
+
+    def _set_watchdog_start_error_time(self):
+        if CONF.api.watchdog_start_error_time == -1:
+            return
+        elif CONF.api.watchdog_start_error_time == 0 and \
+            CONF.api.animbus_horizon_endpoint:
+            start_error_time = self._get_watchdog_start_error_time_by_request()
+        else:
+            start_error_time = CONF.api.watchdog_start_error_time
+
+        if self.start_error_time and self.start_error_time != start_error_time:
+            LOG.info("The start error time from %s change to %s",
+                     self.start_error_time,
+                     start_error_time)
+
+        if start_error_time == 0:
+            return
+        self.start_error_time = start_error_time
+
+    def _watchdog_event_handler(self):
+        LOG.debug("Watchdog handler disposing the watchdog event")
+        for guest in self.list_guests():
+            xml_et = ET.fromstring(guest.get_xml_desc())
+            watchdog_et = xml_et.find('devices').find('watchdog')
+
+            if not watchdog_et or watchdog_et.get('action') != 'reset':
+                return
+            if not self.vms_watchdog_last.get(guest.uuid, None):
+                LOG.debug(
+                    'The vm : %s not start watchdog service',
+                    guest.uuid)
+                self.vms_watchdog_last[guest.uuid] = timeutils.utcnow()
+
+            last_check = self.vms_watchdog_last[guest.uuid]
+            difftime = timeutils.utcnow() - last_check
+            if difftime.total_seconds() > self.start_error_time:
+                guest._domain.reset()
+                LOG.info('The vm : %s reseted', guest.uuid)
+                self.vms_watchdog_last[guest.uuid] = timeutils.utcnow()
+
+    def _get_watchdog_start_error_time_by_request(self):
+        animbus_endpoint = CONF.api.animbus_horizon_endpoint
+        uri = '/api/contrib/settings/fault_time_settings/'
+        headers = {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "Connection": "close"}
+        resp = utils.send_request(
+            'GET', animbus_endpoint, uri, headers=headers)
+        if resp.status_code != 200:
+            LOG.warning('Get start error time has wrong : %s', resp.text)
+            return 0
+        return resp.json().get('fault_time', 600)
 
     @staticmethod
     def _get_libvirt_proxy_classes(libvirt_module):
@@ -328,7 +400,10 @@ class Host(object):
                 if isinstance(event, virtevent.LifecycleEvent):
                     # call possibly with delay
                     self._event_emit_delayed(event)
-
+                elif isinstance(event, virtevent.WatchDogEvent):
+                    check_time = datetime.datetime.utcfromtimestamp(
+                        event.timestamp)
+                    self.vms_watchdog_last[event.uuid] = check_time
                 elif 'conn' in event and 'reason' in event:
                     last_close_event = event
             except native_Queue.Empty:
@@ -448,7 +523,29 @@ class Host(object):
                         " events: %(error)s",
                         {'uri': self._uri, 'error': e})
 
+        try:
+            LOG.debug("Registering for watchdog events %s", self)
+            wrapped_conn.domainEventRegisterAny(
+                None,
+                libvirt.VIR_DOMAIN_EVENT_ID_WATCHDOG,
+                self._event_watchdog_callback,
+                self)
+        except Exception as e:
+            LOG.warning("URI %(uri)s does not support events: %(error)s",
+                        {'uri': self._uri, 'error': e})
+
         return wrapped_conn
+
+    @staticmethod
+    def _event_watchdog_callback(conn, dom, action, opaque):
+        self = opaque
+        uuid = dom.UUIDString()
+        transition = None
+        if action == libvirt.VIR_DOMAIN_EVENT_WATCHDOG_DEBUG:
+            transition = virtevent.EVENT_WATCHDOG_DEBUG
+
+        if transition is not None:
+            self._queue_event(virtevent.WatchDogEvent(uuid, transition))
 
     def _queue_conn_event_handler(self, *args, **kwargs):
         if self._conn_event_handler is None:

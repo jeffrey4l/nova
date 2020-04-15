@@ -43,6 +43,22 @@ NAMES = {
     EVENT_LIFECYCLE_MIGRATION_COMPLETED: _('Migration completed'),
 }
 
+EVENT_WATCHDOG_NONE = 0
+EVENT_WATCHDOG_PAUSE = 1
+EVENT_WATCHDOG_RESET = 2
+EVENT_WATCHDOG_POWEROFF = 3
+EVENT_WATCHDOG_SHUTDOWN = 4
+EVENT_WATCHDOG_DEBUG = 5
+
+WATCHDOG_NAMES = {
+    EVENT_WATCHDOG_DEBUG: 'debug',
+    EVENT_WATCHDOG_RESET: 'reset',
+    EVENT_WATCHDOG_NONE: 'none',
+    EVENT_WATCHDOG_PAUSE: 'pause',
+    EVENT_WATCHDOG_POWEROFF: 'poweroff',
+    EVENT_WATCHDOG_SHUTDOWN: 'shutdown'
+}
+
 
 class Event(object):
     """Base class for all events emitted by a hypervisor.
@@ -116,6 +132,26 @@ class LifecycleEvent(InstanceEvent):
 
     def __repr__(self):
         return "<%s: %s, %s => %s>" % (
+            self.__class__.__name__,
+            self.timestamp,
+            self.uuid,
+            self.get_name())
+
+
+class WatchDogEvent(InstanceEvent):
+    def __init__(self, uuid, transition, timestamp=None):
+        super(WatchDogEvent, self).__init__(uuid, timestamp)
+
+        self.transition = transition
+
+    def get_transition(self):
+        return self.transition
+
+    def get_name(self):
+        return WATCHDOG_NAMES.get(self.transition, _('Unknown'))
+
+    def __repr__(self):
+        return "<%s: WatchDog-%s, %s => %s>" % (
             self.__class__.__name__,
             self.timestamp,
             self.uuid,
