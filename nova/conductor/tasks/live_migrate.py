@@ -254,10 +254,12 @@ class LiveMigrationTask(base.TaskBase):
                        "source and destination nodes do not support "
                        "the operation.")
 
-    def _check_host_is_up(self, host):
+    def _check_host_is_up(self, host, need_enabled=False):
         service = objects.Service.get_by_compute_host(self.context, host)
 
         if not self.servicegroup_api.service_is_up(service):
+            raise exception.ComputeServiceUnavailable(host=host)
+        if need_enabled and service['disabled']:
             raise exception.ComputeServiceUnavailable(host=host)
 
     def _check_requested_destination(self):
@@ -266,7 +268,7 @@ class LiveMigrationTask(base.TaskBase):
         :returns: tuple of (source ComputeNode, destination ComputeNode)
         """
         self._check_destination_is_not_source()
-        self._check_host_is_up(self.destination)
+        self._check_host_is_up(self.destination, need_enabled=True)
         self._check_destination_has_enough_memory()
         source_node, dest_node = self._check_compatible_with_source_hypervisor(
             self.destination)

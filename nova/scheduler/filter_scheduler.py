@@ -208,6 +208,9 @@ class FilterScheduler(driver.Scheduler):
             spec_obj.obj_reset_changes(['instance_uuid'])
 
             hosts = self._get_sorted_hosts(spec_obj, hosts, num)
+            for host in hosts[:]:
+                if host.service['disabled']:
+                    hosts.remove(host)
             if not hosts:
                 # NOTE(jaypipes): If we get here, that means not all instances
                 # in instance_uuids were able to be matched to a selected host.
