@@ -659,6 +659,49 @@ class ImageCacheManagerTestCase(test.NoDBTestCase):
         self.assertEqual(set(['swap_128']), expected_exist)
         self.assertEqual(set(['swap_256']), expected_remove)
 
+    @mock.patch.object(lockutils, 'remove_external_lock_file')
+    @mock.patch.object(lockutils, 'external_lock')
+    @mock.patch('os.stat')
+    @mock.patch('os.path.exists')
+    @mock.patch('os.path.getmtime')
+    @mock.patch('os.remove')
+    def test__remove_base_files_in_time_order(self, mock_remove,
+            mock_getmtime, mock_exist, mock_stat, mock_lock, mock_rm_lock):
+        base_dir = '/tmp_age_test'
+        need_space = 3 * 1024
+
+        image_cache_manager = imagecache.ImageCacheManager()
+        expected_remove = set()
+        expected_exist = set(['image_1', 'image_2', 'image_3'])
+
+        for image in expected_exist:
+            image_cache_manager.removable_base_files.append(image)
+
+        # Associate the generated mirror time with the name
+        mock_getmtime.side_effect = lambda path: int(path[-1])
+
+        mock_exist.side_effect = \
+            lambda path: os.path.dirname(path) == base_dir and \
+                         os.path.basename(path) in expected_exist
+
+        _mock_stat = mock.Mock(st_blocks=4 * 1024)
+        mock_stat.return_value = _mock_stat
+
+        def removefile(path):
+            self.assertEqual(base_dir, os.path.dirname(path),
+                             'Attempt to remove unexpected path')
+
+            fn = os.path.basename(path)
+            expected_remove.add(fn)
+            expected_exist.remove(fn)
+
+        mock_remove.side_effect = removefile
+
+        image_cache_manager._remove_base_files_in_time_order(
+            [base_dir + '/' + _file for _file in expected_exist], need_space)
+        self.assertEqual(set(['image_3']), expected_exist)
+        self.assertEqual(set(['image_1', 'image_2']), expected_remove)
+
     @mock.patch.object(utils, 'synchronized')
     @mock.patch.object(imagecache.ImageCacheManager, '_get_age_of_file',
                        return_value=(True, 100))

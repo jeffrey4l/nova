@@ -240,6 +240,38 @@ class ImageCacheManager(imagecache.ImageCacheManager):
 
         self._remove_old_enough_file(base_file, maxage, remove_lock=False)
 
+    def _remove_base_files_in_time_order(self, base_files, need_space):
+        """Remove base files in time order, old first
+        The order_file_list:
+            [(base_file, (age, size)),...]
+        """
+        order_file_dic = {}
+        for base_file in base_files:
+            exists, age = self._get_age_of_file(base_file)
+            if exists:
+                # Get the actual size of a sparse file
+                size = os.stat(base_file).st_blocks / 2
+                order_file_dic[base_file] = (age, size)
+        order_file_list = sorted(order_file_dic.items(),
+                                 key=lambda item: item[1],
+                                 reverse=True)
+        removed_size = 0
+        print(order_file_list)
+        for _file in order_file_list[:]:
+            if removed_size < need_space:
+                print("size: %s" % _file[1][1])
+                removed_size += _file[1][1]
+                order_file_list.remove(_file)
+                # Set maxage=-1, Be sure to delete the file
+                print(_file)
+                self._remove_old_enough_file(_file[0], -1)
+            else:
+                return
+        if len(order_file_list) == 0 and removed_size < need_space:
+            LOG.warning('Image cache has been removed %(removed_size)sM, '
+                        'No more image caches can be deleted',
+                        {'removed_size': removed_size})
+
     def _remove_base_file(self, base_file):
         """Remove a single base file if it is old enough."""
         maxage = CONF.libvirt.remove_unused_resized_minimum_age_seconds
@@ -311,6 +343,11 @@ class ImageCacheManager(imagecache.ImageCacheManager):
                      ' '.join(self.removable_base_files))
 
             if self.remove_unused_base_images:
+                if CONF.image_cache_manager_interval == -2 and (
+                    self.need_space is not None):
+                    self._remove_base_files_in_time_order(
+                        self.removable_base_files, self.need_space)
+                    return
                 for base_file in self.removable_base_files:
                     self._remove_base_file(base_file)
 
@@ -337,7 +374,8 @@ class ImageCacheManager(imagecache.ImageCacheManager):
             return
         return base_dir
 
-    def update(self, context, all_instances):
+    def update(self, context, all_instances, need_space=None):
+        self.need_space = need_space
         base_dir = self._get_base()
         if not base_dir:
             return
