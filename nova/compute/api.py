@@ -5489,9 +5489,10 @@ class AggregateAPI(base.Base):
         """Get an aggregate by id."""
         return objects.Aggregate.get_by_id(context, aggregate_id)
 
-    def get_aggregate_list(self, context):
-        """Get all the aggregates."""
-        return objects.AggregateList.get_all(context)
+    def get_aggregate_list(self, context, offset=None, limit=None):
+        """Get all the aggregates paged."""
+        return objects.AggregateList.get_all_paged(context,
+                                                   offset=offset, limit=limit)
 
     def get_aggregates_by_host(self, context, compute_host):
         """Get all the aggregates where the given host is presented."""

@@ -104,7 +104,7 @@ class AggregateTestCaseV21(test.NoDBTestCase):
         self._set_up()
 
     def test_index(self):
-        def _list_aggregates(context):
+        def _list_aggregates(context, offset=None, limit=None):
             if context is None:
                 raise Exception()
             return AGGREGATE_LIST

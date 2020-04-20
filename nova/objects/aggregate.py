@@ -422,6 +422,19 @@ def _get_all_from_db(context):
 
 
 @db_api.api_context_manager.reader
+def _get_all_from_db_paged(context, offset=None, limit=None):
+    query = context.session.query(api_models.Aggregate).\
+            options(joinedload('_hosts')).\
+            options(joinedload('_metadata'))
+    if offset:
+        query = query.offset(offset)
+    if limit:
+        query = query.limit(limit)
+
+    return query.all()
+
+
+@db_api.api_context_manager.reader
 def _get_by_host_from_db(context, host, key=None):
     query = context.session.query(api_models.Aggregate).\
             options(joinedload('_hosts')).\
@@ -511,6 +524,13 @@ class AggregateList(base.ObjectListBase, base.NovaObject):
     @base.remotable_classmethod
     def get_all(cls, context):
         db_aggregates = _get_all_from_db(context)
+        return base.obj_make_list(context, cls(context), objects.Aggregate,
+                                  db_aggregates)
+
+    @base.remotable_classmethod
+    def get_all_paged(cls, context, offset=None, limit=None):
+        db_aggregates = _get_all_from_db_paged(context,
+                                               offset=offset, limit=limit)
         return base.obj_make_list(context, cls(context), objects.Aggregate,
                                   db_aggregates)
 
