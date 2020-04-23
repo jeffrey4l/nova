@@ -45,7 +45,10 @@ class AggregateController(wsgi.Controller):
         """Returns a list a host aggregate's id, name, availability_zone."""
         context = _get_context(req)
         context.can(aggr_policies.POLICY_ROOT % 'index')
-        aggregates = self.api.get_aggregate_list(context)
+        offset = req.GET.get('offset', None)
+        limit = req.GET.get('limit', None)
+        aggregates = self.api.get_aggregate_list(context,
+                                                 offset=offset, limit=limit)
         return {'aggregates': [self._marshall_aggregate(req, a)['aggregate']
                                for a in aggregates]}
 
