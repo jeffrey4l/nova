@@ -303,6 +303,18 @@ Related options:
   agent disabled. When used with libvirt the instance mode should be
   configured as HVM.
  """),
+    cfg.IntOpt('image_clean_remaining_space_threshold',
+        default=50,
+        help="""
+Judge according to the current threshold value when the function
+of automatically cleaning up image with insufficient space is turned on.abs+
+When image size + threesosd > space remaining and currently in
+the mode of insufficient space to clean up the image
+(image_cache_manager_interval=-1), the cleaning
+operation will be triggered.
+
+The unit is G.
+"""),
 ]
 
 resource_tracker_opts = [
@@ -956,13 +968,15 @@ Possible values:
 interval_opts = [
     cfg.IntOpt('image_cache_manager_interval',
         default=2400,
-        min=-1,
+        min=-2,
         help="""
 Number of seconds to wait between runs of the image cache manager.
 
 Possible values:
 * 0: run at the default rate.
 * -1: disable
+* -2: run at the auto clean mode
+      Refer to 'image_clean_remaining_space_threshold' configuration.
 * Any other value
 """),
     cfg.IntOpt('bandwidth_poll_interval',

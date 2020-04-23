@@ -127,6 +127,7 @@ from nova.virt.libvirt import vif as libvirt_vif
 from nova.virt.libvirt.volume import mount
 from nova.virt.libvirt.volume import remotefs
 from nova.virt import netutils
+from nova.virt import storage_users
 from nova.volume import cinder
 
 libvirt = None
@@ -3919,6 +3920,7 @@ class LibvirtDriver(driver.ComputeDriver):
                 fetch_func = clone_fallback_to_fetch
             else:
                 fetch_func = libvirt_utils.fetch_image
+            self._check_disk_space(context, instance, root_fname)
             self._try_fetch_image_cache(backend, fetch_func, context,
                                         root_fname, disk_images['image_id'],
                                         instance, size, fallback_from_host)
@@ -3929,6 +3931,49 @@ class LibvirtDriver(driver.ComputeDriver):
         elif need_inject:
             LOG.warning('File injection into a boot from volume '
                         'instance is not supported', instance=instance)
+
+    def _check_disk_space(self, context, instance, filename):
+        # Manually trigger the cleanup operation when
+        # CONF.image_cache_manager_interval is -2
+        if CONF.image_cache_manager_interval != -2:
+            return
+
+        threshold_size = CONF.image_clean_remaining_space_threshold
+
+        # Note(rogeryu) Make sure the remaining space > (threshold_size + \
+        # current_image_size)
+        image_meta = self._image_api.get(context, instance.image_ref)
+        need_space = image_meta['size'] / 1024 ** 2 + threshold_size * 1024
+        base_dir = os.path.join(CONF.instances_path,
+                                CONF.image_cache_subdirectory_name)
+
+        # Unified use of 'M' as unit
+        def get_available_space(base_dir):
+            stat_vfs = os.statvfs(base_dir)
+            return stat_vfs.f_bavail * stat_vfs.f_frsize / (1024 ** 2)
+
+        # The space is enough
+        available_space = get_available_space(base_dir)
+        if available_space > need_space:
+            return
+
+        # The required image cache already exists
+        base = os.path.join(base_dir, filename)
+        if os.path.exists(base):
+            return
+
+        # Get filtered instances
+        storage_users.register_storage_use(CONF.instances_path, CONF.host)
+        nodes = storage_users.get_storage_users(CONF.instances_path)
+        filters = {'deleted': False,
+                   'soft_deleted': True,
+                   'host': nodes}
+        filtered_instances = objects.InstanceList.get_by_filters(context,
+                                 filters, expected_attrs=[], use_slave=True)
+
+        self.image_cache_manager.update(context,
+                                        filtered_instances,
+                                        need_space)
 
     def _create_configdrive(self, context, instance, injection_info,
                             rescue=False):
