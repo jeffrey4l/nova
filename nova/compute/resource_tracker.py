@@ -1801,3 +1801,14 @@ class ResourceTracker(object):
         """
         self.pci_tracker.free_instance_claims(context, instance)
         self.pci_tracker.save(context)
+
+    @utils.synchronized(COMPUTE_RESOURCE_SEMAPHORE)
+    def free_specified_pci_device_for_instance(self, context, dev, instance):
+        """Free instance allocated PCI resources
+
+        :param context: security context
+        :param instance: instance object
+        :param dev: pci device
+        """
+        self.pci_tracker.free_device(dev, instance)
+        self.pci_tracker.save(context)

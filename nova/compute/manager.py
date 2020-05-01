@@ -53,6 +53,7 @@ from oslo_utils import excutils
 from oslo_utils import strutils
 from oslo_utils import timeutils
 from oslo_utils import units
+from oslo_utils import uuidutils
 import six
 from six.moves import range
 
@@ -74,7 +75,7 @@ import nova.context
 from nova import exception
 from nova import exception_wrapper
 from nova import hooks
-from nova.i18n import _
+from nova.i18n import _, _LE
 from nova import image
 from nova import manager
 from nova import network
@@ -2937,6 +2938,11 @@ class ComputeManager(manager.Manager):
         :param instance: nova.objects.instance.Instance object
         :param bdms: nova.objects.block_device.BlockDeviceMappingList object
         """
+        condemneds = []
+        network_info = instance.info_cache.network_info
+        for vif in network_info:
+            condemneds.append(vif)
+
         events = self.instance_events.clear_events_for_instance(instance)
         if events:
             LOG.debug('Events pending at deletion: %(events)s',
@@ -2980,6 +2986,8 @@ class ComputeManager(manager.Manager):
         # doesn't raise and therefore allocation is successfully
         # deleted in placement
         instance.destroy()
+
+        self._live_free_sriov_port(context, condemneds, instance)
 
         self._notify_about_instance_usage(context, instance, "delete.end")
         compute_utils.notify_about_instance_action(context, instance,
@@ -6592,6 +6600,58 @@ class ComputeManager(manager.Manager):
                                     {'port_id': port_id, 'error': ex},
                                     instance=instance)
 
+    def _live_allocate_sriov_port(self, context, instance, port_id):
+        # Get vnic_type and phynet_name
+        if port_id is not None:
+            vnic_type, phynet_name = self.network_api.get_port_vnic_info(
+                context, port_id)
+        else:
+            vnic_type = network_model.VNIC_TYPE_NORMAL
+
+        # Determine the type of vic
+        if vnic_type in network_model.VNIC_TYPES_SRIOV:
+
+            spec = {pci_req_module.PCI_NET_TAG: phynet_name}
+            dev_type = pci_req_module.DEVICE_TYPE_FOR_VNIC_TYPE.get(vnic_type)
+            if dev_type:
+                spec[pci_req_module.PCI_DEVICE_TYPE_TAG] = dev_type
+
+            vif_pci_request = objects.InstancePCIRequest(
+                count=1,
+                spec=[spec],
+                request_id=uuidutils.generate_uuid())
+            pci_request_id = vif_pci_request.request_id
+
+            vif_pci_requests = objects.InstancePCIRequests(
+                requests=[vif_pci_request],
+                instance_uuid=instance.uuid)
+
+            # Assign a pci device according to pci_request_id
+            claimed_pci_devices_objs = self.rt.claim_pci_devices(
+                context,
+                vif_pci_requests)
+            if not claimed_pci_devices_objs:
+                msg = _LE("Cann't assign pci device to sriov port.")
+                raise exception.ConsumSRIOVNetworkRequestsFailed(msg=msg)
+            # Update instance's pci_devices
+            self.rt.allocate_pci_devices_for_instance(context, instance)
+            return pci_request_id
+        return None
+
+    def _live_free_sriov_port(self, context, condemneds, instance):
+        """Support live detach specified sriov port.
+        """
+        for condemned in condemneds:
+            if condemned['vnic_type'] in network_model.VNIC_TYPES_SRIOV:
+                for dev in instance.pci_devices:
+                    if dev.address == condemned['profile'].get('pci_slot') \
+                        and dev.status in (fields.PciDeviceStatus.CLAIMED,
+                                           fields.PciDeviceStatus.ALLOCATED):
+                        if dev.instance_uuid == instance['uuid']:
+                            # free pci device from instance
+                            self.rt.free_specified_pci_device_for_instance(
+                                context, dev, instance)
+
     # TODO(mriedem): There are likely race failures which can result in
     # NotFound and QuotaError exceptions getting traced as well.
     @messaging.expected_exceptions(
@@ -6627,9 +6687,14 @@ class ComputeManager(manager.Manager):
             phase=fields.NotificationPhase.START)
 
         bind_host_id = self.driver.network_binding_host_id(context, instance)
+
+        # NOTE(rogeryu): Generate pci request and associat with the SR-IOV port
+        pci_request_id = self._live_allocate_sriov_port(context,
+            instance, port_id)
+
         network_info = self.network_api.allocate_port_for_instance(
             context, instance, port_id, network_id, requested_ip,
-            bind_host_id=bind_host_id, tag=tag)
+            bind_host_id=bind_host_id, tag=tag, pci_request_id=pci_request_id)
         if len(network_info) != 1:
             LOG.error('allocate_port_for_instance returned %(ports)s '
                       'ports', {'ports': len(network_info)})
@@ -6703,6 +6768,8 @@ class ComputeManager(manager.Manager):
         else:
             self._deallocate_port_for_instance(
                 context, instance, port_id, raise_on_failure=True)
+
+        self._live_free_sriov_port(context, [condemned], instance)
 
         compute_utils.notify_about_instance_action(
             context, instance, self.host,

@@ -693,9 +693,7 @@ class API(base_api.NetworkAPI):
                         vnic_type = port.get('binding:vnic_type',
                                              network_model.VNIC_TYPE_NORMAL)
                         if vnic_type in network_model.VNIC_TYPES_SRIOV:
-                            raise exception.AttachSRIOVPortNotSupported(
-                                port_id=port['id'],
-                                instance_uuid=instance.uuid)
+                            pass
 
                     # If requesting a specific port, automatically process
                     # the network for that port as if it were explicitly
@@ -1600,13 +1598,14 @@ class API(base_api.NetworkAPI):
 
     def allocate_port_for_instance(self, context, instance, port_id,
                                    network_id=None, requested_ip=None,
-                                   bind_host_id=None, tag=None):
+                                   bind_host_id=None, tag=None,
+                                   pci_request_id=None):
         """Allocate a port for the instance."""
         requested_networks = objects.NetworkRequestList(
             objects=[objects.NetworkRequest(network_id=network_id,
                                             address=requested_ip,
                                             port_id=port_id,
-                                            pci_request_id=None,
+                                            pci_request_id=pci_request_id,
                                             tag=tag)])
         return self.allocate_for_instance(context, instance, vpn=False,
                 requested_networks=requested_networks,
@@ -1970,6 +1969,19 @@ class API(base_api.NetworkAPI):
         # extension is enabled.
         resource_request = port.get(constants.RESOURCE_REQUEST, None)
         return vnic_type, trusted, network_id, resource_request
+
+    def get_port_vnic_info(self, context, port_id):
+        neutron = get_client(context, admin=True)
+        port = self._show_port(
+            context, port_id, neutron_client=neutron,
+            fields=['binding:vnic_type', constants.BINDING_PROFILE,
+                    'network_id', constants.RESOURCE_REQUEST])
+        network_id = port.get('network_id')
+        vnic_type = port.get('binding:vnic_type',
+                             network_model.VNIC_TYPE_NORMAL)
+        physnet, _ = self._get_physnet_tunneled_info(
+            context, neutron, network_id)
+        return vnic_type, physnet
 
     def create_resource_requests(self, context, requested_networks,
                                  pci_requests=None):

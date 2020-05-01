@@ -35,6 +35,7 @@ from oslo_utils import uuidutils
 import requests_mock
 import six
 from six.moves import range
+import testtools
 
 from nova import context
 from nova.db.sqlalchemy import api as db_api
@@ -4992,6 +4993,20 @@ class TestNeutronv2WithMock(TestNeutronv2Base):
         req_nets_in_call = mock_allocate.call_args[1]['requested_networks']
         self.assertEqual('foo', req_nets_in_call.objects[0].tag)
 
+    @mock.patch.object(neutronapi.API, 'allocate_for_instance')
+    def test_allocate_port_for_instance_with_pci_request_id(self,
+                                                            mock_allocate):
+        instance = fake_instance.fake_instance_obj(self.context)
+        api = neutronapi.API()
+        pci_request_id = uuidutils.generate_uuid()
+        api.allocate_port_for_instance(self.context, instance, None,
+                                       network_id=None, requested_ip=None,
+                                       bind_host_id=None, tag=None,
+                                       pci_request_id=pci_request_id)
+        req_nets_in_call = mock_allocate.call_args[1]['requested_networks']
+        self.assertEqual(pci_request_id,
+                         req_nets_in_call.objects[0].pci_request_id)
+
     @mock.patch('nova.objects.network_request.utils')
     @mock.patch('nova.network.neutronv2.api.LOG')
     @mock.patch('nova.network.neutronv2.api.base_api')
@@ -6826,6 +6841,7 @@ class TestAllocateForInstance(test.NoDBTestCase):
             exception.PortBindingFailed,
             {"binding:vif_type": model.VIF_TYPE_BINDING_FAILED})
 
+    @testtools.skip("Now support sriov network card live plug.")
     def test_validate_requested_port_ids_raise_sriov(self):
         self._assert_validate_requested_port_ids_raises(
             exception.AttachSRIOVPortNotSupported,

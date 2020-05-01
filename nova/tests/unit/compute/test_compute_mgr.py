@@ -223,6 +223,7 @@ class ComputeManagerUnitTestCase(test.NoDBTestCase,
         specd_compute.host = 'compute'
 
         mock_inst = mock.Mock()
+        mock_inst.info_cache.network_info = []
         mock_inst.uuid = uuids.instance
         mock_inst.save = mock.Mock()
         mock_inst.destroy = mock.Mock()
@@ -234,9 +235,13 @@ class ComputeManagerUnitTestCase(test.NoDBTestCase,
         def _mark_shutdown(*args, **kwargs):
             call_tracker._shutdown_instance(*args, **kwargs)
 
+        def _mark_free_sriov_port(*args, **kwargs):
+            call_tracker._live_free_sriov_port(*args, **kwargs)
+
         specd_compute.instance_events = call_tracker
         specd_compute._notify_about_instance_usage = _mark_notify
         specd_compute._shutdown_instance = _mark_shutdown
+        specd_compute._live_free_sriov_port = _mark_free_sriov_port
 
         mock_bdms = mock.Mock()
         specd_compute._delete_instance(specd_compute,
@@ -248,6 +253,7 @@ class ComputeManagerUnitTestCase(test.NoDBTestCase,
         self.assertEqual(['clear_events_for_instance',
                           '_notify_about_instance_usage',
                           '_shutdown_instance',
+                          '_live_free_sriov_port',
                           '_notify_about_instance_usage'],
                          methods_called)
         mock_notify.assert_has_calls([
@@ -2333,6 +2339,17 @@ class ComputeManagerUnitTestCase(test.NoDBTestCase,
         self.flags(host='fake-host')
         self._test_cleanup_incomplete_migrations('fake-mini')
 
+    @mock.patch('nova.network.neutronv2.api.get_client')
+    def test__assign_pci_device_to_sriov_port_no_port_id(self, mock_neutron):
+        mock_neutron.return_value = mock.Mock()
+        instance = fake_instance.fake_instance_obj(
+            self.context,
+            power_state=power_state.RUNNING)
+        port_id = None
+        result = self.compute._live_allocate_sriov_port(
+            self.context, instance, port_id)
+        self.assertIsNone(result)
+
     def test_attach_interface_failure(self):
         # Test that the fault methods are invoked when an attach fails
         db_instance = fake_instance.fake_db_instance()
@@ -2341,6 +2358,7 @@ class ComputeManagerUnitTestCase(test.NoDBTestCase,
                                                       db_instance)
         e = exception.InterfaceAttachFailed(instance_uuid=f_instance.uuid)
 
+        @mock.patch.object(self.compute, '_live_allocate_sriov_port')
         @mock.patch.object(compute_utils, 'EventReporter')
         @mock.patch.object(compute_utils, 'notify_about_instance_action')
         @mock.patch.object(compute_utils, 'add_instance_fault_from_exc')
@@ -2349,7 +2367,9 @@ class ComputeManagerUnitTestCase(test.NoDBTestCase,
                            side_effect=e)
         @mock.patch.object(self.compute, '_instance_update',
                            side_effect=lambda *a, **k: {})
-        def do_test(update, meth, add_fault, notify, event):
+        def do_test(update, meth, add_fault, notify, event,
+                    mock_assign_sriov_port):
+            mock_assign_sriov_port.return_value = None
             self.assertRaises(exception.InterfaceAttachFailed,
                               self.compute.attach_interface,
                               self.context, f_instance, 'net_id', 'port_id',
