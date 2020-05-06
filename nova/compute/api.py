@@ -5148,7 +5148,8 @@ class HostAPI(base.Base):
         return result
 
     def service_get_all(self, context, filters=None, set_zones=False,
-                        all_cells=False, cell_down_support=False):
+                        all_cells=False, cell_down_support=False,
+                        limit=None, offset=None, host=None, binary=None):
         """Returns a list of services, optionally filtering the results.
 
         If specified, 'filters' should be a dictionary containing services
@@ -5173,7 +5174,8 @@ class HostAPI(base.Base):
         if all_cells:
             services = []
             service_dict = nova_context.scatter_gather_all_cells(context,
-                objects.ServiceList.get_all, disabled, set_zones=set_zones)
+                objects.ServiceList.get_all, disabled, set_zones=set_zones,
+                limit=limit, offset=offset, host=host, binary=binary)
             for cell_uuid, service in service_dict.items():
                 if not nova_context.is_cell_failure_sentinel(service):
                     services.extend(service)
@@ -5197,7 +5199,9 @@ class HostAPI(base.Base):
                                 "from the results.", cell_uuid)
         else:
             services = objects.ServiceList.get_all(context, disabled,
-                                                   set_zones=set_zones)
+                                                   set_zones=set_zones,
+                                                   limit=limit, offset=offset,
+                                                   host=host, binary=binary)
         ret_services = []
         for service in services:
             for key, val in filters.items():

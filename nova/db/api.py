@@ -126,9 +126,11 @@ def service_get_by_host_and_binary(context, host, binary):
     return IMPL.service_get_by_host_and_binary(context, host, binary)
 
 
-def service_get_all(context, disabled=None):
+def service_get_all(context, disabled=None, offset=None, limit=None,
+                    binary=None, host=None):
     """Get all services."""
-    return IMPL.service_get_all(context, disabled)
+    return IMPL.service_get_all(context, disabled, offset=offset, limit=limit,
+                                binary=binary, host=host)
 
 
 def service_get_all_by_topic(context, topic):

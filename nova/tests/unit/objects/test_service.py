@@ -253,7 +253,9 @@ class _TestServiceObject(object):
         services = service.ServiceList.get_all(self.context, disabled=False)
         self.assertEqual(1, len(services))
         self.compare_obj(services[0], fake_service, allow_missing=OPTIONAL)
-        mock_get_all.assert_called_once_with(self.context, disabled=False)
+        mock_get_all.assert_called_once_with(self.context, disabled=False,
+                                             limit=None, offset=None,
+                                             binary=None, host=None)
 
     @mock.patch.object(db, 'service_get_all')
     @mock.patch.object(aggregate.AggregateList, 'get_by_metadata_key')
@@ -265,10 +267,14 @@ class _TestServiceObject(object):
         agg.hosts = [fake_service['host']]
         mock_get_by_key.return_value = [agg]
         mock_get_all.return_value = [dict(fake_service, topic='compute')]
-        services = service.ServiceList.get_all(self.context, set_zones=True)
+        services = service.ServiceList.get_all(self.context,
+                                               disabled=False,
+                                               set_zones=True)
         self.assertEqual(1, len(services))
         self.assertEqual('test-az', services[0].availability_zone)
-        mock_get_all.assert_called_once_with(self.context, disabled=None)
+        mock_get_all.assert_called_once_with(self.context, disabled=False,
+                                             limit=None, offset=None,
+                                             binary=None, host=None)
         mock_get_by_key.assert_called_once_with(self.context,
                          'availability_zone', hosts=set(agg.hosts))
 

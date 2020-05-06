@@ -609,8 +609,14 @@ class ServiceList(base.ObjectListBase, base.NovaObject):
                                   db_services)
 
     @base.remotable_classmethod
-    def get_all(cls, context, disabled=None, set_zones=False):
-        db_services = db.service_get_all(context, disabled=disabled)
+    def get_all(cls, context, disabled=None, set_zones=False,
+                limit=None, offset=None, binary=None, host=None):
+        db_services = db.service_get_all(context,
+                                         disabled=disabled,
+                                         limit=limit,
+                                         offset=offset,
+                                         binary=binary,
+                                         host=host)
         if set_zones:
             db_services = availability_zones.set_availability_zones(
                 context, db_services)

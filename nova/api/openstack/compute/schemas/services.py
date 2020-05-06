@@ -74,6 +74,10 @@ index_query_schema = {
     'properties': {
         'host': parameter_types.common_query_param,
         'binary': parameter_types.common_query_param,
+        'limit': parameter_types.multi_params(
+             parameter_types.non_negative_integer),
+        'offset': parameter_types.multi_params(
+             parameter_types.non_negative_integer)
     },
     # For backward compatible changes
     'additionalProperties': True

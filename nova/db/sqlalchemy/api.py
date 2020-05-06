@@ -441,11 +441,25 @@ def service_get_minimum_version(context, binaries):
 
 
 @pick_context_manager_reader
-def service_get_all(context, disabled=None):
-    query = model_query(context, models.Service)
+def service_get_all(context, disabled=None, limit=None, offset=None,
+                    binary=None, host=None):
+    query = model_query(context, models.Service, read_deleted="no")
 
+    query = query.filter(models.Service.binary.notin_(
+        ['nova-osapi_compute', 'noova-ec2', 'nova-metadata']))
+
+    if host:
+        query = query.filter_by(host=host)
+    if binary:
+        query = query.filter_by(binary=binary)
     if disabled is not None:
         query = query.filter_by(disabled=disabled)
+
+    if offset:
+        query = query.offset(int(offset))
+
+    if limit:
+        query = query.limit(int(limit))
 
     return query.all()
 

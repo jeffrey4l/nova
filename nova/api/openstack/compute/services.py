@@ -64,13 +64,19 @@ class ServiceController(wsgi.Controller):
         context = req.environ['nova.context']
         context.can(services_policies.BASE_POLICY_NAME)
 
+        offset = req.GET.get('offset', None)
+        limit = req.GET.get('limit', None)
+        host = req.GET.get('host', None)
+        binary = req.GET.get('binary', None)
+
         cell_down_support = api_version_request.is_supported(
             req, min_version=PARTIAL_CONSTRUCT_FOR_CELL_DOWN_MIN_VERSION)
 
         _services = [
             s
             for s in self.host_api.service_get_all(context, set_zones=True,
-                all_cells=True, cell_down_support=cell_down_support)
+                all_cells=True, cell_down_support=cell_down_support,
+                offset=offset, limit=limit, host=host, binary=binary)
             if s['binary'] not in api_services
         ]
 

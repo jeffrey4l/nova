@@ -227,7 +227,9 @@ class ComputeHostAPITestCase(test.TestCase):
                          'host2-unavailable']),
                          sorted([svc.host for svc in services]))
         mock_sg.assert_called_once_with(self.ctxt, objects.ServiceList.get_all,
-                                        None, set_zones=False)
+                                        None, binary=None, host=None,
+                                        limit=None, offset=None,
+                                        set_zones=False)
         mock_get_hm.assert_called_once_with(self.ctxt, cells[1].id)
 
     def test_service_get_all_no_zones(self):
@@ -242,14 +244,22 @@ class ComputeHostAPITestCase(test.TestCase):
             # Test no filters
             result = self.host_api.service_get_all(self.ctxt)
             mock_service_get_all.assert_called_once_with(self.ctxt,
-                                                         disabled=None)
+                                                         disabled=None,
+                                                         binary=None,
+                                                         host=None,
+                                                         limit=None,
+                                                         offset=None)
             self._compare_objs(result, services)
 
             # Test no filters #2
             mock_service_get_all.reset_mock()
             result = self.host_api.service_get_all(self.ctxt, filters={})
             mock_service_get_all.assert_called_once_with(self.ctxt,
-                                                         disabled=None)
+                                                         disabled=None,
+                                                         binary=None,
+                                                         host=None,
+                                                         limit=None,
+                                                         offset=None)
             self._compare_objs(result, services)
 
             # Test w/ filter
@@ -257,7 +267,11 @@ class ComputeHostAPITestCase(test.TestCase):
             result = self.host_api.service_get_all(self.ctxt,
                                                    filters=dict(host='host2'))
             mock_service_get_all.assert_called_once_with(self.ctxt,
-                                                         disabled=None)
+                                                         disabled=None,
+                                                         binary=None,
+                                                         host=None,
+                                                         limit=None,
+                                                         offset=None)
             self._compare_objs(result, [services[1]])
 
         _do_test()
@@ -280,7 +294,11 @@ class ComputeHostAPITestCase(test.TestCase):
             # Test no filters
             result = self.host_api.service_get_all(self.ctxt, set_zones=True)
             mock_service_get_all.assert_called_once_with(self.ctxt,
-                                                         disabled=None)
+                                                         disabled=None,
+                                                         binary=None,
+                                                         host=None,
+                                                         limit=None,
+                                                         offset=None)
             self._compare_objs(result, exp_services)
 
             # Test no filters #2
@@ -288,7 +306,11 @@ class ComputeHostAPITestCase(test.TestCase):
             result = self.host_api.service_get_all(self.ctxt, filters={},
                                                    set_zones=True)
             mock_service_get_all.assert_called_once_with(self.ctxt,
-                                                         disabled=None)
+                                                         disabled=None,
+                                                         binary=None,
+                                                         host=None,
+                                                         limit=None,
+                                                         offset=None)
             self._compare_objs(result, exp_services)
 
             # Test w/ filter
@@ -297,7 +319,11 @@ class ComputeHostAPITestCase(test.TestCase):
                                                    filters=dict(host='host2'),
                                                    set_zones=True)
             mock_service_get_all.assert_called_once_with(self.ctxt,
-                                                         disabled=None)
+                                                         disabled=None,
+                                                         binary=None,
+                                                         host=None,
+                                                         limit=None,
+                                                         offset=None)
             self._compare_objs(result, [exp_services[1]])
 
             # Test w/ zone filter but no set_zones arg.
@@ -306,7 +332,11 @@ class ComputeHostAPITestCase(test.TestCase):
             result = self.host_api.service_get_all(self.ctxt,
                                                    filters=filters)
             mock_service_get_all.assert_called_once_with(self.ctxt,
-                                                         disabled=None)
+                                                         disabled=None,
+                                                         binary=None,
+                                                         host=None,
+                                                         limit=None,
+                                                         offset=None)
             self._compare_objs(result, exp_services)
 
         _do_test()
