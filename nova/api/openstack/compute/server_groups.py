@@ -22,7 +22,6 @@ import webob
 from webob import exc
 
 from nova.api.openstack import api_version_request
-from nova.api.openstack import common
 from nova.api.openstack.compute.schemas import server_groups as schema
 from nova.api.openstack import wsgi
 from nova.api import validation
@@ -154,12 +153,16 @@ class ServerGroupController(wsgi.Controller):
         """Returns a list of server groups."""
         context = _authorize_context(req, 'index')
         project_id = context.project_id
+        offset = req.GET.get('offset', None)
+        limit = req.GET.get('limit', None)
+
         if 'all_projects' in req.GET and context.is_admin:
-            sgs = objects.InstanceGroupList.get_all(context)
+            limited_list = objects.InstanceGroupList.get_all(
+                context, offset=offset, limit=limit)
         else:
-            sgs = objects.InstanceGroupList.get_by_project_id(
-                    context, project_id)
-        limited_list = common.limited(sgs.objects, req)
+            limited_list = objects.InstanceGroupList.get_by_project_id(
+                    context, project_id=project_id,
+                    offset=offset, limit=limit)
         result = [self._format_server_group(context, group, req)
                   for group in limited_list]
         return {'server_groups': result}

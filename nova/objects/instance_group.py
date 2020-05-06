@@ -539,10 +539,17 @@ class InstanceGroupList(base.ObjectListBase, base.NovaObject):
 
     @staticmethod
     @db_api.api_context_manager.reader
-    def _get_from_db(context, project_id=None):
+    def _get_from_db(context, project_id=None, offset=None, limit=None):
         query = _instance_group_get_query(context)
         if project_id is not None:
             query = query.filter_by(project_id=project_id)
+
+        if offset is not None:
+            query = query.offset(offset)
+
+        if limit is not None:
+            query = query.limit(limit)
+
         return query.all()
 
     @staticmethod
@@ -558,14 +565,15 @@ class InstanceGroupList(base.ObjectListBase, base.NovaObject):
         return counts
 
     @base.remotable_classmethod
-    def get_by_project_id(cls, context, project_id):
-        api_db_groups = cls._get_from_db(context, project_id=project_id)
+    def get_by_project_id(cls, context, project_id, offset=None, limit=None):
+        api_db_groups = cls._get_from_db(context, project_id=project_id,
+                                         offset=offset, limit=limit)
         return base.obj_make_list(context, cls(context), objects.InstanceGroup,
                                   api_db_groups)
 
     @base.remotable_classmethod
-    def get_all(cls, context):
-        api_db_groups = cls._get_from_db(context)
+    def get_all(cls, context, offset=None, limit=None):
+        api_db_groups = cls._get_from_db(context, offset=offset, limit=limit)
         return base.obj_make_list(context, cls(context), objects.InstanceGroup,
                                   api_db_groups)
 
