@@ -92,7 +92,7 @@ class FilterSchedulerTestCase(test_scheduler.SchedulerTestCase):
 
         host_state = mock.Mock(spec=host_manager.HostState, host="fake_host",
                 uuid=uuids.cn1, cell_uuid=uuids.cell, nodename="fake_node",
-                limits={})
+                limits={}, service={"disabled": 0})
         all_host_states = [host_state]
         mock_get_all_states.return_value = all_host_states
 
@@ -158,7 +158,8 @@ class FilterSchedulerTestCase(test_scheduler.SchedulerTestCase):
 
         host_state = mock.Mock(spec=host_manager.HostState,
                 host="fake_host", nodename="fake_node", uuid=uuids.cn1,
-                limits={}, cell_uuid=uuids.cell, instances={})
+                limits={}, cell_uuid=uuids.cell, instances={},
+                service={"disabled": 0})
         all_host_states = [host_state]
         mock_get_all_states.return_value = all_host_states
         mock_get_hosts.return_value = all_host_states
@@ -210,7 +211,7 @@ class FilterSchedulerTestCase(test_scheduler.SchedulerTestCase):
 
         host_state = mock.Mock(spec=host_manager.HostState,
                 host="fake_host", nodename="fake_node", uuid=uuids.cn1,
-                cell_uuid=uuids.cell1, limits={})
+                cell_uuid=uuids.cell1, limits={}, service={'disabled': 0})
         all_host_states = [host_state]
         mock_get_all_states.return_value = all_host_states
         mock_get_hosts.return_value = all_host_states
@@ -282,7 +283,8 @@ class FilterSchedulerTestCase(test_scheduler.SchedulerTestCase):
             instance_group=None)
 
         host_state = mock.Mock(spec=host_manager.HostState,
-            host=mock.sentinel.host, uuid=uuids.cn1, cell_uuid=uuids.cell1)
+            host=mock.sentinel.host, uuid=uuids.cn1,
+            cell_uuid=uuids.cell1, service={'disabled': 0})
         all_host_states = [host_state]
         mock_get_all_states.return_value = all_host_states
         mock_get_hosts.return_value = all_host_states
@@ -339,7 +341,8 @@ class FilterSchedulerTestCase(test_scheduler.SchedulerTestCase):
 
         host_state = mock.Mock(spec=host_manager.HostState,
                 host="fake_host", nodename="fake_node", uuid=uuids.cn1,
-                cell_uuid=uuids.cell1, limits={}, updated='fake')
+                cell_uuid=uuids.cell1, limits={}, updated='fake',
+                service={'disabled': 0})
         all_host_states = [host_state]
         mock_get_all_states.return_value = all_host_states
         mock_get_hosts.side_effect = [
@@ -384,13 +387,13 @@ class FilterSchedulerTestCase(test_scheduler.SchedulerTestCase):
 
         host_state0 = mock.Mock(spec=host_manager.HostState,
                 host="fake_host0", nodename="fake_node0", uuid=uuids.cn0,
-                cell_uuid=uuids.cell, limits={})
+                cell_uuid=uuids.cell, limits={}, service={'disabled': 0})
         host_state1 = mock.Mock(spec=host_manager.HostState,
                 host="fake_host1", nodename="fake_node1", uuid=uuids.cn1,
-                cell_uuid=uuids.cell, limits={})
+                cell_uuid=uuids.cell, limits={}, service={'disabled': 0})
         host_state2 = mock.Mock(spec=host_manager.HostState,
                 host="fake_host2", nodename="fake_node2", uuid=uuids.cn2,
-                cell_uuid=uuids.cell, limits={})
+                cell_uuid=uuids.cell, limits={}, service={'disabled': 0})
         all_host_states = [host_state0, host_state1, host_state2]
         mock_get_all_states.return_value = all_host_states
         mock_get_hosts.return_value = all_host_states
@@ -450,13 +453,13 @@ class FilterSchedulerTestCase(test_scheduler.SchedulerTestCase):
 
         host_state0 = mock.Mock(spec=host_manager.HostState,
                 host="fake_host0", nodename="fake_node0", uuid=uuids.cn0,
-                cell_uuid=uuids.cell, limits={})
+                cell_uuid=uuids.cell, limits={}, service={'disabled': 0})
         host_state1 = mock.Mock(spec=host_manager.HostState,
                 host="fake_host1", nodename="fake_node1", uuid=uuids.cn1,
-                cell_uuid=uuids.cell, limits={})
+                cell_uuid=uuids.cell, limits={}, service={'disabled': 0})
         host_state2 = mock.Mock(spec=host_manager.HostState,
                 host="fake_host2", nodename="fake_node2", uuid=uuids.cn2,
-                cell_uuid=uuids.cell, limits={})
+                cell_uuid=uuids.cell, limits={}, service={'disabled': 0})
         all_host_states = [host_state0, host_state1, host_state2]
         mock_get_all_states.return_value = all_host_states
         mock_get_hosts.return_value = all_host_states
@@ -524,10 +527,10 @@ class FilterSchedulerTestCase(test_scheduler.SchedulerTestCase):
 
         hs1 = mock.Mock(spec=host_manager.HostState, host='host1',
                 nodename="node1", limits={}, uuid=uuids.cn1,
-                cell_uuid=uuids.cell1, instances={})
+                cell_uuid=uuids.cell1, instances={}, service={'disabled': 0})
         hs2 = mock.Mock(spec=host_manager.HostState, host='host2',
                 nodename="node2", limits={}, uuid=uuids.cn2,
-                cell_uuid=uuids.cell2, instances={})
+                cell_uuid=uuids.cell2, instances={}, service={'disabled': 0})
         all_host_states = [hs1, hs2]
         mock_get_all_states.return_value = all_host_states
         mock_claim.return_value = True
@@ -874,7 +877,7 @@ class FilterSchedulerTestCase(test_scheduler.SchedulerTestCase):
 
         host_state = mock.Mock(spec=host_manager.HostState, host="fake_host",
                 uuid=uuids.cn1, cell_uuid=uuids.cell, nodename="fake_node",
-                limits={}, updated="Not None")
+                limits={}, updated="Not None", service={'disabled': 0})
         all_host_states = [host_state]
         mock_get_all_states.return_value = all_host_states
         mock_get_hosts.side_effect = [all_host_states, []]
@@ -902,6 +905,7 @@ class FilterSchedulerTestCase(test_scheduler.SchedulerTestCase):
             hs = host_manager.HostState(host_name, "node%s" % num,
                     uuids.cell)
             hs.uuid = getattr(uuids, host_name)
+            hs.update(service={'disabled': 0})
             all_host_states.append(hs)
             alloc_reqs[hs.uuid] = [{}]
 
@@ -969,6 +973,7 @@ class FilterSchedulerTestCase(test_scheduler.SchedulerTestCase):
             hs = host_manager.HostState(host_name, "node%s" % num,
                     cell_uuid)
             hs.uuid = getattr(uuids, host_name)
+            hs.update(service={'disabled': 0})
             all_host_states.append(hs)
             alloc_reqs[hs.uuid] = [{}]
 
@@ -1022,6 +1027,7 @@ class FilterSchedulerTestCase(test_scheduler.SchedulerTestCase):
             hs = host_manager.HostState(host_name, "node%s" % num,
                     uuids.cell)
             hs.uuid = getattr(uuids, host_name)
+            hs.update(service={'disabled': 0})
             all_host_states.append(hs)
             alloc_reqs[hs.uuid] = [{}]
 
