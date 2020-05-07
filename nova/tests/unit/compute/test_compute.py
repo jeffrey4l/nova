@@ -312,6 +312,8 @@ class BaseTestCase(test.TestCase):
         inst.flavor = flavor
         inst.old_flavor = None
         inst.new_flavor = None
+        inst.info_cache = objects.InstanceInfoCache(
+            network_info=network_model.NetworkInfo([]))
         if params:
             inst.flavor.update(params.pop('flavor', {}))
             inst.update(params)
@@ -10369,6 +10371,8 @@ class ComputeAPITestCase(BaseTestCase):
         req_ip = '1.2.3.4'
         mock_allocate = mock.Mock(return_value=nwinfo)
         self.compute.network_api.allocate_port_for_instance = mock_allocate
+        mock_pci_request_id = mock.Mock(return_value=None)
+        self.compute._live_allocate_sriov_port = mock_pci_request_id
 
         with mock.patch.dict(self.compute.driver.capabilities,
                              supports_attach_interface=True):
@@ -10380,7 +10384,7 @@ class ComputeAPITestCase(BaseTestCase):
         self.assertEqual(vif['id'], network_id)
         mock_allocate.assert_called_once_with(
             self.context, instance, port_id, network_id, req_ip,
-            bind_host_id='fake-mini', tag=None)
+            bind_host_id='fake-mini', pci_request_id=None, tag=None)
         mock_notify.assert_has_calls([
             mock.call(self.context, instance, self.compute.host,
                       action='interface_attach', phase='start'),
@@ -10397,6 +10401,8 @@ class ComputeAPITestCase(BaseTestCase):
         req_ip = '1.2.3.4'
         mock_allocate = mock.Mock(return_value=nwinfo)
         self.compute.network_api.allocate_port_for_instance = mock_allocate
+        mock_pci_request_id = mock.Mock(return_value=None)
+        self.compute._live_allocate_sriov_port = mock_pci_request_id
 
         with mock.patch.dict(self.compute.driver.capabilities,
                              supports_attach_interface=True,
@@ -10409,7 +10415,7 @@ class ComputeAPITestCase(BaseTestCase):
         self.assertEqual(vif['id'], network_id)
         mock_allocate.assert_called_once_with(
             self.context, instance, port_id, network_id, req_ip,
-            bind_host_id='fake-mini', tag='foo')
+            bind_host_id='fake-mini', pci_request_id=None, tag='foo')
         mock_notify.assert_has_calls([
             mock.call(self.context, instance, self.compute.host,
                       action='interface_attach', phase='start'),
@@ -10419,6 +10425,8 @@ class ComputeAPITestCase(BaseTestCase):
 
     def test_tagged_attach_interface_raises(self):
         instance = self._create_fake_instance_obj()
+        mock_pci_request_id = mock.Mock(return_value=None)
+        self.compute._live_allocate_sriov_port = mock_pci_request_id
         with mock.patch.dict(self.compute.driver.capabilities,
                              supports_attach_interface=True,
                              supports_tagged_attach_interface=False):
@@ -10443,6 +10451,8 @@ class ComputeAPITestCase(BaseTestCase):
         network_id = nwinfo[0]['network']['id']
         port_id = nwinfo[0]['id']
         req_ip = '1.2.3.4'
+        mock_pci_request_id = mock.Mock(return_value=None)
+        self.compute._live_allocate_sriov_port = mock_pci_request_id
 
         with test.nested(
             mock.patch.object(compute_utils, 'notify_about_instance_action'),
@@ -10464,6 +10474,7 @@ class ComputeAPITestCase(BaseTestCase):
             mock_allocate.assert_called_once_with(self.context, instance,
                                                   network_id, port_id, req_ip,
                                                   bind_host_id='fake-host',
+                                                  pci_request_id=None,
                                                   tag=None)
             mock_deallocate.assert_called_once_with(self.context, instance,
                                                     port_id)
