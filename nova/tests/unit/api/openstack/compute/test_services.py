@@ -142,7 +142,8 @@ def fake_db_service_get_by_host_binary(services):
     return service_get_by_host_binary
 
 
-def fake_service_get_by_host_binary(context, host, binary):
+def fake_service_get_by_host_binary(context, host, binary,
+                                    offset=None, limit=None):
     fake = fake_db_service_get_by_host_binary(fake_services_list)
     return fake(context, host, binary)
 

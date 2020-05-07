@@ -371,7 +371,7 @@ class TestRemoteInstanceGroupObject(test_objects._RemoteTest,
     pass
 
 
-def _mock_db_list_get(*args, **kwargs):
+def _mock_db_list_get(context, project_id=None, offset=None, limit=None):
     instances = [(uuids.f1, 'f1', 'p1'),
                  (uuids.f2, 'f2', 'p1'),
                  (uuids.f3, 'f3', 'p2'),
@@ -383,6 +383,12 @@ def _mock_db_list_get(*args, **kwargs):
         values['name'] = instance[1]
         values['project_id'] = instance[2]
         result.append(values)
+
+    if offset is None:
+        offset = 0
+    if limit:
+        result = result[offset:(offset + limit)]
+
     return result
 
 
@@ -393,7 +399,8 @@ class _TestInstanceGroupListObject(object):
         mock_api_get.side_effect = _mock_db_list_get
         inst_list = objects.InstanceGroupList.get_all(self.context)
         self.assertEqual(4, len(inst_list.objects))
-        mock_api_get.assert_called_once_with(self.context)
+        mock_api_get.assert_called_once_with(self.context,
+                                             limit=None, offset=None)
 
     @mock.patch('nova.objects.InstanceGroupList._get_from_db')
     def test_list_by_project_id(self, mock_api_get):
@@ -401,7 +408,8 @@ class _TestInstanceGroupListObject(object):
         objects.InstanceGroupList.get_by_project_id(
                 self.context, mock.sentinel.project_id)
         mock_api_get.assert_called_once_with(
-                self.context, project_id=mock.sentinel.project_id)
+                self.context, limit=None, offset=None,
+                project_id=mock.sentinel.project_id)
 
 
 class TestInstanceGroupListObject(test_objects._LocalTest,

@@ -18,6 +18,7 @@ import mock
 from oslo_utils.fixture import uuidsentinel
 from oslo_utils import uuidutils
 import six
+import urlparse
 import webob
 
 from nova.api.openstack import api_version_request as avr
@@ -294,16 +295,48 @@ class ServerGroupTestV21(test.NoDBTestCase):
             tenant_specific = {'server_groups': tenant_groups}
 
         def return_all_server_groups():
-            return objects.InstanceGroupList(
+            _res = objects.InstanceGroupList(
                 objects=[objects.InstanceGroup(
                     **server_group_db(sg)) for sg in all_groups])
+
+            if limited:
+                parsed_limited = urlparse.parse_qsl(limited)
+                limit_params = {s[0]: s[1] for s in parsed_limited}
+                offset = limit_params.get('offset', 0)
+                limit = limit_params.get('limit', -1)
+                try:
+                    offset = int(offset)
+                except ValueError:
+                    offset = 0
+                try:
+                    limit = int(limit)
+                except ValueError:
+                    limit = -1
+                _res = _res[offset: (offset + limit)]
+            return _res
 
         mock_get_all.return_value = return_all_server_groups()
 
         def return_tenant_server_groups():
-            return objects.InstanceGroupList(
+            _res = objects.InstanceGroupList(
                 objects=[objects.InstanceGroup(
                     **server_group_db(sg)) for sg in tenant_groups])
+
+            if limited:
+                parsed_limited = urlparse.parse_qsl(limited)
+                limit_params = {s[0]: s[1] for s in parsed_limited}
+                offset = limit_params.get('offset', 0)
+                limit = limit_params.get('limit', -1)
+                try:
+                    offset = int(offset)
+                except ValueError:
+                    offset = 0
+                try:
+                    limit = int(limit)
+                except ValueError:
+                    limit = -1
+                _res = _res[offset: (offset + limit)]
+            return _res
 
         mock_get_by_project.return_value = return_tenant_server_groups()
 
