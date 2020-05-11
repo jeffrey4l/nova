@@ -16,6 +16,7 @@
 #
 
 import copy
+import os_traits
 import time
 
 from keystoneauth1 import loading as ks_loading
@@ -455,17 +456,23 @@ class API(base_api.NetworkAPI):
             # need resource allocation manipulation in placement but might also
             # need a new scheduling if resource on this host is not available.
             if port.get(constants.RESOURCE_REQUEST, None):
-                msg = _(
-                    "The auto-created port %(port_id)s is being deleted due "
-                    "to its network having QoS policy.")
-                LOG.info(msg, {'port_id': port_id})
-                self._cleanup_created_port(port_client, port_id, instance)
-                # NOTE(gibi): This limitation regarding server create can be
-                # removed when the port creation is moved to the conductor. But
-                # this code also limits attaching a network that has QoS
-                # minimum bandwidth rule.
-                raise exception.NetworksWithQoSPolicyNotSupported(
-                    instance_uuid=instance.uuid, network_id=network_id)
+                # NOTE(rogeryu): Added the function of starting virtual machine
+                # through network with qos, The filtering process will consider
+                # the network's qos rule, So let go of the restrictions here.
+                net_response = port_client.show_network(network_id,
+                    fields='qos_policy_id').get('network')
+                if not net_response.get('qos_policy_id', None):
+                    msg = _(
+                        "The auto-created port %(port_id)s is being deleted "
+                        "due to its network having QoS policy.")
+                    LOG.info(msg, {'port_id': port_id})
+                    self._cleanup_created_port(port_client, port_id, instance)
+                    # NOTE(gibi): This limitation regarding server create can
+                    # be removed when the port creation is moved to the
+                    # conductor. But this code also limits attaching a network
+                    # that has QoS minimum bandwidth rule.
+                    raise exception.NetworksWithQoSPolicyNotSupported(
+                        instance_uuid=instance.uuid, network_id=network_id)
             try:
                 _ensure_no_port_binding_failure(port)
             except exception.PortBindingFailed:
@@ -1885,7 +1892,8 @@ class API(base_api.NetworkAPI):
         raise exception.FixedIpNotFoundForSpecificInstance(
                 instance_uuid=instance.uuid, ip=address)
 
-    def _get_physnet_tunneled_info(self, context, neutron, net_id):
+    def _get_physnet_tunneled_info(self, context, neutron, net_id,
+        contain_qos = False):
         """Retrieve detailed network info.
 
         :param context: The request context.
@@ -1898,8 +1906,10 @@ class API(base_api.NetworkAPI):
             used for the physnet name.
         """
         if self._has_multi_provider_extension(context, neutron=neutron):
-            network = neutron.show_network(net_id,
-                                           fields='segments').get('network')
+            fields = (['segments', 'qos_policy_id'] if contain_qos
+                else 'segments')
+            network = neutron.show_network(
+                net_id, fields=fields).get('network')
             segments = network.get('segments', {})
             for net in segments:
                 # NOTE(vladikr): In general, "multi-segments" network is a
@@ -1912,8 +1922,10 @@ class API(base_api.NetworkAPI):
                 # case of multiple vlan segments associated with different
                 # physical networks.
                 physnet_name = net.get('provider:physical_network')
+                qos_policy_id = net.get('qos_policy_id', None)
                 if physnet_name:
-                    return physnet_name, False
+                    return ((physnet_name, False, qos_policy_id) if contain_qos
+                        else (physnet_name, False))
 
             # Raising here as at least one segment should
             # have a physical network provided.
@@ -1922,11 +1934,17 @@ class API(base_api.NetworkAPI):
                          "physical_network") % net_id)
                 raise exception.NovaException(message=msg)
 
-        net = neutron.show_network(
-            net_id, fields=['provider:physical_network',
-                            'provider:network_type']).get('network')
-        return (net.get('provider:physical_network'),
-                net.get('provider:network_type') in constants.L3_NETWORK_TYPES)
+        fields = (['provider:physical_network',
+                   'provider:network_type',
+                   'qos_policy_id'] if contain_qos
+            else ['provider:physical_network', 'provider:network_type'])
+        net = neutron.show_network(net_id, fields=fields).get('network')
+        physnet_name = net.get('provider:physical_network')
+        tunneled = net.get(
+            'provider:network_type') in constants.L3_NETWORK_TYPES
+        qos_policy_id = net.get('qos_policy_id', None)
+        return ((physnet_name, tunneled, qos_policy_id) if contain_qos
+            else (physnet_name, tunneled))
 
     @staticmethod
     def _get_trusted_mode_from_port(port):
@@ -1983,6 +2001,50 @@ class API(base_api.NetworkAPI):
             context, neutron, network_id)
         return vnic_type, physnet
 
+    def _gen_net_resource_request(self, context, neutron,
+        physnet, qos_policy_id):
+        """Generate network resource request
+
+        :param context: the request context
+        :param neutron: The Neutron client
+        :param physnet: physnet name
+        :param qos_policy_id: the id of qos policy bound on network
+
+        :return: the resource_request attribute of the neutron network.
+
+        For example:
+
+            resource_request = {
+                "resources": {
+                    "NET_BW_IGR_KILOBIT_PER_SEC": 1000,
+                    "NET_BW_EGR_KILOBIT_PER_SEC": 1000},
+                "required": ["CUSTOM_PHYSNET_PHYSNET1",
+                             "CUSTOM_VNIC_TYPE_NORMAL"]
+            }
+        """
+        resources = {}
+        physnet_trait = os_traits.normalize_name('%s%s' % (
+            "PHYSNET_", physnet))
+        vnic_trait = os_traits.normalize_name('%s%s' % (
+            "VNIC_TYPE_", network_model.VNIC_TYPE_NORMAL))
+
+        qos_policy = neutron.show_qos_policy(qos_policy_id).get("policy")
+        rule_direction_class = {
+            "egress": "NET_BW_EGR_KILOBIT_PER_SEC",
+            "ingress": "NET_BW_IGR_KILOBIT_PER_SEC"
+        }
+        for rule in qos_policy.get("rules", []):
+            if rule["type"] == "minimum_bandwidth":
+                resources[rule_direction_class[rule["direction"]]] = \
+                    rule["min_kbps"]
+        if not resources:
+            return None
+
+        return {
+            'resources': resources,
+            'required': [physnet_trait, vnic_trait]
+        }
+
     def create_resource_requests(self, context, requested_networks,
                                  pci_requests=None):
         """Retrieve all information for the networks passed at the time of
@@ -2016,6 +2078,7 @@ class API(base_api.NetworkAPI):
             vnic_type = network_model.VNIC_TYPE_NORMAL
             pci_request_id = None
             requester_id = None
+            resource_request = None
 
             if request_net.port_id:
                 result = self._get_port_vnic_info(
@@ -2028,18 +2091,23 @@ class API(base_api.NetworkAPI):
                     # InstancePCIRequest.requester_id is semantically linked
                     # to a port with a resource_request.
                     requester_id = request_net.port_id
-                    # NOTE(gibi): explicitly orphan the RequestGroup by setting
-                    # context=None as we never intended to save it to the DB.
-                    resource_requests.append(
-                        objects.RequestGroup.from_port_request(
-                            context=None,
-                            port_uuid=request_net.port_id,
-                            port_resource_request=resource_request))
 
             elif request_net.network_id and not request_net.auto_allocate:
                 network_id = request_net.network_id
-                physnet, tunneled_ = self._get_physnet_tunneled_info(
-                    context, neutron, network_id)
+                physnet, tunneled_, qos_policy_id = \
+                    self._get_physnet_tunneled_info(
+                        context, neutron, network_id, True)
+                if qos_policy_id:
+                    resource_request = self._gen_net_resource_request(context,
+                        neutron, physnet, qos_policy_id)
+                if resource_request:
+                    requester_id = network_id
+            if resource_request:
+                resource_requests.append(
+                    objects.RequestGroup.from_port_request(
+                        context=None,
+                        port_uuid=requester_id,
+                        port_resource_request=resource_request))
 
             # All tunneled traffic must use the same logical NIC so we just
             # need to know if there is one or more tunneled networks present.
