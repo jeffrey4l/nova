@@ -37,6 +37,7 @@ from nova.scheduler import utils
 
 CONF = nova.conf.CONF
 LOG = logging.getLogger(__name__)
+VGPU_NODE_CACHE = {}
 
 
 class FilterScheduler(driver.Scheduler):
@@ -495,3 +496,29 @@ class FilterScheduler(driver.Scheduler):
         return self.host_manager.get_host_states_by_uuids(context,
                                                           compute_uuids,
                                                           spec_obj)
+
+    def sync_vgpu_node_cache(self, context):
+        global VGPU_NODE_CACHE
+
+        def get_resource_providers():
+            url = "/resource_providers"
+            resp = self.placement_client.get(
+                url,
+                global_request_id=context.global_id)
+            if resp.status_code == 200:
+                rps = resp.json().get("resource_providers")
+                return [rp.get("uuid") for rp in rps]
+            LOG.warning("Get no resoure providers during sync vgpu node cache")
+            return []
+
+        def vgpu_count(rp):
+            url = "/resource_providers/%s/inventories/VGPU" % rp
+            resp = self.placement_client.get(
+                url,
+                global_request_id=context.global_id)
+            if resp.status_code == 200:
+                return int(resp.json().get("total", 0))
+            return 0
+
+        for rp in get_resource_providers():
+            VGPU_NODE_CACHE[rp] = vgpu_count(rp)

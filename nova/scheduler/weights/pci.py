@@ -22,6 +22,7 @@ versa. Configure the importance of this affinitization using the
 """
 
 import nova.conf
+from nova.scheduler.filter_scheduler import VGPU_NODE_CACHE
 from nova.scheduler import utils
 from nova.scheduler import weights
 
@@ -54,7 +55,8 @@ class PCIWeigher(weights.BaseHostWeigher):
         completely, if possible.
         """
         pools = host_state.pci_stats.pools if host_state.pci_stats else []
-        free = sum(pool['count'] for pool in pools) or 0
+        vgpu_count = VGPU_NODE_CACHE.get(host_state.uuid, 0)
+        free = sum(pool['count'] for pool in pools) + vgpu_count or 0
 
         # reverse the "has PCI" values. For instances *without* PCI device
         # requests, this ensures we avoid the hosts with the most free PCI
