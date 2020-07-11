@@ -32,6 +32,7 @@ import datetime
 import inspect
 import operator
 import os
+import re
 import socket
 import sys
 import threading
@@ -74,6 +75,8 @@ native_threading = patcher.original("threading")
 native_Queue = patcher.original("Queue" if six.PY2 else "queue")
 
 CONF = nova.conf.CONF
+
+MEMORY_TOTAL_RE = re.compile(r'^MemTotal:\s*(?P<total>\d+) kB$', re.MULTILINE)
 
 
 # This list is for libvirt hypervisor drivers that need special handling.
@@ -1156,7 +1159,19 @@ class Host(object):
         if CONF.libvirt.file_backed_memory > 0:
             return CONF.libvirt.file_backed_memory
         else:
-            return self._get_hardware_info()[1]
+            try:
+                return self._get_hardware_info()[1]
+            except libvirt.libvirtError:
+                return self._get_memory_mb_total_from_proc()
+
+    def _get_memory_mb_total_from_proc(self):
+        with open('/proc/meminfo') as f:
+            found = MEMORY_TOTAL_RE.search(f.read())
+            if found:
+                total_kb = int(found.groupdict()['total'])
+                return int(total_kb / 1024)
+            else:
+                raise ValueError("Can not get total memory")
 
     def _sum_domain_memory_mb(self, include_host=True):
         """Get the total memory consumed by guest domains
