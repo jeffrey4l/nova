@@ -313,6 +313,8 @@ class LegacyValidatingNotifier(object):
         'compute.instance.live_migration.rollback.dest.start',
         'compute.instance.live_migration._rollback.end',
         'compute.instance.live_migration._rollback.start',
+        'compute.instance.live_resize.end',
+        'compute.instance.live_resize.start',
         'compute.instance.pause.end',
         'compute.instance.pause.start',
         'compute.instance.power_off.end',

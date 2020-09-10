@@ -54,6 +54,13 @@ to resize to the same host. Setting this option to true will add
 the same host to the destination options. Also set to true
 if you allow the ServerGroupAffinityFilter and need to resize.
 """),
+    cfg.BoolOpt('allow_live_resize_to_other_host',
+        default=False,
+        help="""
+Allow destination machine to match source for live resize. By default
+it is not allowed to live resize to other hosts. Setting this option
+to true will allow live resize to other hosts when local is not satisfied.
+"""),
     cfg.ListOpt('non_inheritable_image_properties',
         default=['cache_in_nova', 'bittorrent',
                  'img_signature_hash_method', 'img_signature',

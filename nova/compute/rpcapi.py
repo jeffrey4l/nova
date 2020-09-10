@@ -928,6 +928,20 @@ class ComputeAPI(object):
                 server=_compute_host(None, instance), version=version)
         cctxt.cast(ctxt, 'reset_network', instance=instance)
 
+    def live_resize_instance(self, ctxt, instance, image, migration,
+                             node, instance_type, destination):
+        version = '5.1'
+        msg_args = {'instance': instance,
+                    'image': image,
+                    'migration': migration,
+                    'node': node,
+                    'instance_type': instance_type,
+        }
+        client = self.router.client(ctxt)
+        cctxt = client.prepare(server=destination,
+                               version=version)
+        return cctxt.cast(ctxt, 'live_resize_instance', **msg_args)
+
     def resize_instance(self, ctxt, instance, migration, image, instance_type,
                         request_spec, clean_shutdown=True):
         msg_args = {'instance': instance, 'migration': migration,

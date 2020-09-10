@@ -20,6 +20,7 @@ policy_data = """
     "os_compute_api:servers:show:host_status": "",
     "os_compute_api:servers:allow_all_filters": "",
     "os_compute_api:servers:migrations:force_complete": "",
+    "os_compute_api:servers:live_resize": "",
     "os_compute_api:os-admin-actions:inject_network_info": "",
     "os_compute_api:os-admin-actions:reset_network": "",
     "os_compute_api:os-admin-actions:reset_state": "",

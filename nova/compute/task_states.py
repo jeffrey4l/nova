@@ -55,6 +55,9 @@ RESIZE_REVERTING = fields.InstanceTaskState.RESIZE_REVERTING
 # possible task states during confirm_resize()
 RESIZE_CONFIRMING = fields.InstanceTaskState.RESIZE_CONFIRMING
 
+# possible task states during live_resize()
+LIVE_RESIZING = fields.InstanceTaskState.LIVE_RESIZING
+
 # possible task states during reboot()
 REBOOTING = fields.InstanceTaskState.REBOOTING
 REBOOT_PENDING = fields.InstanceTaskState.REBOOT_PENDING

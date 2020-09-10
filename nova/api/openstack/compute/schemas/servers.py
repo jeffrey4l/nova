@@ -463,6 +463,22 @@ resize = {
     'additionalProperties': False,
 }
 
+live_resize = {
+    'type': 'object',
+    'properties': {
+        'liveResize': {
+            'type': 'object',
+            'properties': {
+                'flavorRef': parameter_types.flavor_ref,
+            },
+            'required': ['flavorRef'],
+            'additionalProperties': False,
+        },
+    },
+    'required': ['liveResize'],
+    'additionalProperties': False,
+}
+
 create_image = {
     'type': 'object',
     'properties': {

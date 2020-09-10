@@ -2573,11 +2573,12 @@ class LibvirtConfigGuest(LibvirtConfigObject):
         self.name = None
         self.memory = 500 * units.Mi
         self.max_memory_size = None
-        self.max_memory_slots = 0
+        self.max_memory_slots = 16
         self.membacking = None
         self.memtune = None
         self.numatune = None
         self.vcpus = 1
+        self.max_vcpus = 0
         self.cpuset = None
         self.cpu = None
         self.cputune = None
@@ -2616,12 +2617,14 @@ class LibvirtConfigGuest(LibvirtConfigObject):
             root.append(self.memtune.format_dom())
         if self.numatune is not None:
             root.append(self.numatune.format_dom())
-        if self.cpuset is not None:
-            vcpu = self._text_node("vcpu", self.vcpus)
-            vcpu.set("cpuset", hardware.format_cpu_spec(self.cpuset))
-            root.append(vcpu)
+        if self.max_vcpus:
+            vcpu = self._text_node("vcpu", self.max_vcpus)
+            vcpu.set("current", str(self.vcpus))
         else:
-            root.append(self._text_node("vcpu", self.vcpus))
+            vcpu = self._text_node("vcpu", self.vcpus)
+        if self.cpuset is not None:
+            vcpu.set("cpuset", hardware.format_cpu_spec(self.cpuset))
+        root.append(vcpu)
 
         if len(self.metadata) > 0:
             metadata = etree.Element("metadata")
@@ -3077,6 +3080,30 @@ class LibvirtConfigGuestMetaNovaInstance(LibvirtConfigObject):
         self.roottype = None
         self.rootid = None
 
+    def parse_dom(self, xmldoc):
+        super(LibvirtConfigGuestMetaNovaInstance, self).parse_dom(xmldoc)
+        for c in xmldoc.getchildren():
+            if c.tag == "name":
+                self.name = c.text
+            elif c.tag == "package":
+                if c.values():
+                    self.package = c.values()[0]
+            elif c.tag == "creationTime":
+                self.creationTime = time.mktime(
+                    time.strptime(c.text, "%Y-%m-%d %H:%M:%S"))
+            elif c.tag == "root":
+                for item in c.items():
+                    if item[0] == "type":
+                        self.roottype = item[1]
+                    elif item[0] == "uuid":
+                        self.rootid = item[1]
+            elif c.tag == "owner":
+                self.owner = LibvirtConfigGuestMetaNovaOwner()
+                self.owner.parse_dom(c)
+            elif c.tag == "flavor":
+                self.flavor = LibvirtConfigGuestMetaNovaFlavor()
+                self.flavor.parse_dom(c)
+
     def format_dom(self):
         meta = super(LibvirtConfigGuestMetaNovaInstance, self).format_dom()
 
@@ -3118,6 +3145,21 @@ class LibvirtConfigGuestMetaNovaFlavor(LibvirtConfigObject):
         self.ephemeral = None
         self.vcpus = None
 
+    def parse_dom(self, xmldoc):
+        super(LibvirtConfigGuestMetaNovaFlavor, self).parse_dom(xmldoc)
+        self.name = xmldoc.get('name')
+        for c in xmldoc.getchildren():
+            if c.tag == "memory":
+                self.memory = int(c.text)
+            elif c.tag == "disk":
+                self.disk = int(c.text)
+            elif c.tag == "swap":
+                self.swap = int(c.text)
+            elif c.tag == "ephemeral":
+                self.ephemeral = int(c.text)
+            elif c.tag == "vcpus":
+                self.vcpus = int(c.text)
+
     def format_dom(self):
         meta = super(LibvirtConfigGuestMetaNovaFlavor, self).format_dom()
         meta.set("name", self.name)
@@ -3146,6 +3188,20 @@ class LibvirtConfigGuestMetaNovaOwner(LibvirtConfigObject):
         self.username = None
         self.projectid = None
         self.projectname = None
+
+    def parse_dom(self, xmldoc):
+        super(LibvirtConfigGuestMetaNovaOwner, self).parse_dom(xmldoc)
+        for c in xmldoc.getchildren():
+            if c.tag == "user":
+                self.username = c.text
+                for item in c.items():
+                    if item[0] == "uuid":
+                        self.userid = item[1]
+            elif c.tag == "project":
+                self.projectname = c.text
+                for item in c.items():
+                    if item[0] == "uuid":
+                        self.projectid = item[1]
 
     def format_dom(self):
         meta = super(LibvirtConfigGuestMetaNovaOwner, self).format_dom()

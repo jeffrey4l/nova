@@ -4857,6 +4857,74 @@ class ComputeManager(manager.Manager):
     @reverts_task_state
     @wrap_instance_event(prefix='compute')
     @wrap_instance_fault
+    def live_resize_instance(self, context, instance, image,
+                             migration, node, instance_type):
+        """Starts the live resize of a running instance."""
+        try:
+            self._live_resize_instance(context, instance, image,
+                                       migration, node, instance_type)
+        except Exception:
+            with excutils.save_and_reraise_exception():
+                self._revert_allocation(context, instance, migration)
+        finally:
+            # Whether an error occurred or not, at this point the
+            # instance is on the dest host so to avoid leaking
+            # allocations in placement, delete them here.
+            self._delete_allocation_after_move(
+                context, instance, migration)
+
+    def _live_resize_instance(self, context, instance, image,
+                              migration, node, instance_type):
+        with self._error_out_instance_on_exception(context, instance), \
+             errors_out_migration_ctxt(migration):
+
+            migration.status = 'live-resizing'
+            migration.save()
+
+            old_instance_type = instance.get_flavor()
+
+            instance.task_state = task_states.LIVE_RESIZING
+            instance.flavor = instance_type
+            instance.vcpus = instance_type.vcpus
+            instance.memory_mb = instance_type.memory_mb
+            instance.numa_topology = hardware.numa_get_constraints(
+                instance_type, instance.image_meta)
+            instance.save(expected_task_state=None)
+
+            bdms = objects.BlockDeviceMappingList.get_by_instance_uuid(
+                    context, instance.uuid)
+
+            compute_utils.notify_about_instance_action(context, instance,
+                   self.host, action=fields.NotificationAction.LIVE_RESIZE,
+                   phase=fields.NotificationPhase.START, bdms=bdms)
+
+            allocs = self.reportclient.get_allocations_for_consumer(
+                context, instance.uuid)
+            with self.rt.resize_claim(context, instance, instance_type, node,
+                                      migration, allocs, image_meta=image):
+                self.driver.live_resize(context, instance, old_instance_type,
+                                        instance_type)
+
+            instance.task_state = None
+            instance.save(expected_task_state=task_states.LIVE_RESIZING)
+            instance.apply_migration_context()
+
+            migration.status = 'finished'
+            migration.save()
+
+            self.rt.drop_move_claim(context, instance, migration.source_node,
+                                    old_instance_type, prefix='old_')
+            instance.drop_migration_context()
+
+            compute_utils.notify_about_instance_action(context, instance,
+                   self.host, action=fields.NotificationAction.LIVE_RESIZE,
+                   phase=fields.NotificationPhase.END, bdms=bdms)
+            self.instance_events.clear_events_for_instance(instance)
+
+    @wrap_exception()
+    @reverts_task_state
+    @wrap_instance_event(prefix='compute')
+    @wrap_instance_fault
     def resize_instance(self, context, instance, image,
                         migration, instance_type, clean_shutdown,
                         request_spec=None):

@@ -568,7 +568,7 @@ def _sort_possible_cpu_topologies(possible, wanttopology):
 
 
 def _get_desirable_cpu_topologies(flavor, image_meta, allow_threads=True,
-                                  numa_topology=None):
+                                  numa_topology=None, max_vcpus=None):
     """Identify desirable CPU topologies based for given constraints.
 
     Look at the properties set in the flavor extra specs and the image
@@ -596,7 +596,8 @@ def _get_desirable_cpu_topologies(flavor, image_meta, allow_threads=True,
     LOG.debug("Topology preferred %(preferred)s, maximum %(maximum)s",
               {"preferred": preferred, "maximum": maximum})
 
-    possible = _get_possible_cpu_topologies(flavor.vcpus,
+    vcpus = max_vcpus or flavor.vcpus
+    possible = _get_possible_cpu_topologies(vcpus,
                                             maximum,
                                             allow_threads)
     LOG.debug("Possible topologies %s", possible)
@@ -629,7 +630,7 @@ def _get_desirable_cpu_topologies(flavor, image_meta, allow_threads=True,
 
 
 def get_best_cpu_topology(flavor, image_meta, allow_threads=True,
-                          numa_topology=None):
+                          numa_topology=None, max_vcpus=None):
     """Identify best CPU topology for given constraints.
 
     Look at the properties set in the flavor extra specs and the image
@@ -646,8 +647,8 @@ def get_best_cpu_topology(flavor, image_meta, allow_threads=True,
 
     :returns: an objects.VirtCPUTopology instance for best topology
     """
-    return _get_desirable_cpu_topologies(flavor, image_meta,
-                                         allow_threads, numa_topology)[0]
+    return _get_desirable_cpu_topologies(flavor, image_meta, allow_threads,
+                                         numa_topology, max_vcpus)[0]
 
 
 def _numa_cell_supports_pagesize_request(host_cell, inst_cell):

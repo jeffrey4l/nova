@@ -10072,6 +10072,73 @@ class ComputeManagerMigrationTestCase(test.NoDBTestCase,
         self.assertEqual(new_dev.address,
                          updated_nw_info[1]['profile']['pci_slot'])
 
+    @mock.patch.object(db, 'instance_fault_create')
+    def test_live_resize_failure(self, mock_fault_create):
+        mock_fault_create.return_value = (
+            test_instance_fault.fake_faults['fake-uuid'][0])
+        self.migration.save = mock.Mock(
+            side_effect=self.TestResizeError('Expected failure.'))
+        self.instance.save = mock.Mock()
+
+        self.assertRaises(self.TestResizeError,
+                          self.compute.live_resize_instance,
+                          self.context, self.instance, self.image,
+                          self.migration, 'fake_node',
+                          instance_type='type')
+
+    @mock.patch.object(objects.Instance, 'drop_migration_context')
+    @mock.patch.object(objects.Instance, 'apply_migration_context')
+    @mock.patch.object(nova.compute.resource_tracker.ResourceTracker,
+                       'drop_move_claim')
+    @mock.patch.object(nova.compute.resource_tracker.ResourceTracker,
+                       'resize_claim')
+    @mock.patch.object(objects.BlockDeviceMappingList, 'get_by_instance_uuid')
+    def test_live_resize_instance(self, mock_get_by_instance_uuid,
+                                  mock_resize_claim, mock_drop_move_claim,
+                                  mock_apply_mig_ctxt, mock_drop_mig_ctxt):
+        expected_migration_statuses = ['live-resizing', 'finished']
+        fake_db_flavor = fake_flavor.fake_db_flavor()
+        o_flavor = self.instance.get_flavor()
+        n_flavor = objects.Flavor(context.get_admin_context(),
+                                  **fake_db_flavor)
+
+        def migration_save_side_effect(*args, **kwargs):
+            expected_status = expected_migration_statuses.pop(0)
+            if expected_status != self.migration.status:
+                msg = "Expected migration status %s to match %s."
+                raise self.TestResizeError(
+                    msg % (expected_status, self.migration.status))
+
+        self.migration.save = mock.Mock(side_effect=migration_save_side_effect)
+
+        expected_task_states = [task_states.LIVE_RESIZING, None]
+
+        def instance_save_side_effect(*args, **kwargs):
+            expected_state = expected_task_states.pop(0)
+            if expected_state != self.instance.task_state:
+                msg = "Expected task_state %s to match %s."
+                raise self.TestResizeError(
+                    msg % (expected_state, self.instance.task_state))
+
+        self.instance.save = mock.Mock(side_effect=instance_save_side_effect)
+
+        with mock.patch.object(self.compute.driver, 'live_resize') as (
+                mock_live_resize):
+            self.compute.live_resize_instance(
+                self.context, self.instance, self.image, self.migration,
+                'fake_node', instance_type=n_flavor)
+            mock_live_resize.assert_called_once_with(
+                self.context, self.instance, o_flavor, n_flavor)
+            mock_apply_mig_ctxt.assert_called_once_with()
+            mock_drop_mig_ctxt.assert_called_once_with()
+
+        self.migration.save.assert_has_calls([mock.call()] * 2)
+        self.instance.save.assert_has_calls([
+            mock.call(expected_task_state=None),
+            mock.call(expected_task_state=task_states.LIVE_RESIZING)])
+        mock_get_by_instance_uuid.assert_called_once_with(self.context,
+                                                          self.instance.uuid)
+
 
 class ComputeManagerInstanceUsageAuditTestCase(test.TestCase):
     def setUp(self):

@@ -720,6 +720,31 @@ class Guest(object):
         else:
             return JobInfo._get_job_stats_compat(self._domain)
 
+    def set_vcpus_number(self, vcpus):
+        flags = (libvirt.VIR_DOMAIN_AFFECT_LIVE |
+                 libvirt.VIR_DOMAIN_AFFECT_CONFIG)
+        self._domain.setVcpusFlags(vcpus, flags)
+
+    def attach_memory_device(self, node_id, memory_kb):
+        xml = ("<memory model='dimm'><target><size unit='KiB'>%s</size>"
+               "<node>%s</node></target></memory>") % (str(memory_kb), node_id)
+        flags = (libvirt.VIR_DOMAIN_AFFECT_LIVE |
+                 libvirt.VIR_DOMAIN_AFFECT_CONFIG)
+        self._domain.attachDeviceFlags(xml, flags)
+
+    def get_metadata(self):
+        flags = libvirt.VIR_DOMAIN_AFFECT_CONFIG
+        return self._domain.metadata(type=libvirt.VIR_DOMAIN_METADATA_ELEMENT,
+                                     uri=vconfig.NOVA_NS, flags=flags)
+
+    def set_metadata(self, metadata):
+        flags = (libvirt.VIR_DOMAIN_AFFECT_LIVE |
+                 libvirt.VIR_DOMAIN_AFFECT_CONFIG)
+        return self._domain.setMetadata(
+            type=libvirt.VIR_DOMAIN_METADATA_ELEMENT,
+            metadata=metadata, key='metadata',
+            uri=vconfig.NOVA_NS, flags=flags)
+
 
 class BlockDevice(object):
     """Wrapper around block device API"""

@@ -864,6 +864,7 @@ class NotificationAction(BaseNovaEnum):
     BUILD_INSTANCES = 'build_instances'
     MIGRATE_SERVER = 'migrate_server'
     REBUILD_SERVER = 'rebuild_server'
+    LIVE_RESIZE = 'live_resize'
 
     ALL = (UPDATE, EXCEPTION, DELETE, PAUSE, UNPAUSE, RESIZE, VOLUME_SWAP,
            SUSPEND, POWER_ON, REBOOT, SHUTDOWN, SNAPSHOT, INTERFACE_ATTACH,
@@ -877,7 +878,7 @@ class NotificationAction(BaseNovaEnum):
            REMOVE_HOST, ADD_MEMBER, UPDATE_METADATA, LOCK, UNLOCK,
            REBUILD_SCHEDULED, UPDATE_PROP, LIVE_MIGRATION_FORCE_COMPLETE,
            CONNECT, USAGE, BUILD_INSTANCES, MIGRATE_SERVER, REBUILD_SERVER,
-           SELECT_DESTINATIONS)
+           SELECT_DESTINATIONS, LIVE_RESIZE)
 
 
 # TODO(rlrossit): These should be changed over to be a StateMachine enum from
@@ -947,6 +948,7 @@ class InstanceTaskState(BaseNovaEnum):
     SHELVING_IMAGE_UPLOADING = 'shelving_image_uploading'
     SHELVING_OFFLOADING = 'shelving_offloading'
     UNSHELVING = 'unshelving'
+    LIVE_RESIZING = 'live_resizing'
 
     ALL = (SCHEDULING, BLOCK_DEVICE_MAPPING, NETWORKING, SPAWNING,
            IMAGE_SNAPSHOT, IMAGE_SNAPSHOT_PENDING, IMAGE_PENDING_UPLOAD,
@@ -958,7 +960,7 @@ class InstanceTaskState(BaseNovaEnum):
            RESCUING, UNRESCUING, REBUILDING, REBUILD_BLOCK_DEVICE_MAPPING,
            REBUILD_SPAWNING, MIGRATING, DELETING, SOFT_DELETING, RESTORING,
            SHELVING, SHELVING_IMAGE_PENDING_UPLOAD, SHELVING_IMAGE_UPLOADING,
-           SHELVING_OFFLOADING, UNSHELVING)
+           SHELVING_OFFLOADING, UNSHELVING, LIVE_RESIZING)
 
 
 class InstancePowerState(Enum):

@@ -1382,6 +1382,26 @@ class CannotResizeToSameFlavor(NovaException):
     msg_fmt = _("When resizing, instances must change flavor!")
 
 
+class CannotLiveResizeToSmallerFlavor(NovaException):
+    msg_fmt = _("When live resizing, given flavor must be larger than "
+                "the current instance's flavor. Instance's flavor: "
+                "%(current_flavor)s, given flavor: %(new_flavor)s")
+
+
+class LiveResizeConfigurationError(NovaException):
+    msg_fmt = _("Does the current flavor contain extra specs of "
+                "`hw:live_resize`? Or the quota of new flavor exceeds "
+                "the setting of `hw:live_resize_max_vcpus` and "
+                "`hw:live_resize_max_memory`. Instance's flavor: "
+                "%(current_flavor)s, given flavor: %(new_flavor)s")
+
+
+class LiveResizeMemoryDeltaError(NovaException):
+    msg_fmt = _("Linux requires memory hotplug in sizes of 128Mib "
+                "or any multiple of it.Instance's memory: %(current_memory)s,"
+                " given memory: %(new_memory)s")
+
+
 class ResizeError(NovaException):
     msg_fmt = _("Resize error: %(reason)s")
 

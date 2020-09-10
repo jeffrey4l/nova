@@ -3492,6 +3492,77 @@ class LibvirtDriver(driver.ComputeDriver):
         else:
             LOG.info("Instance spawned successfully.", instance=instance)
 
+    def _live_resize_numa(self, guest, flavor, delta, instance):
+        if delta['memory']:
+            LOG.debug("Live resizing: set memory!")
+            cell_num = len(instance.numa_topology.cells)
+            dev_pre_mem = delta['memory'] // 128 // cell_num * 128
+            dev_extra_mem = delta['memory'] // 128 % cell_num * 128
+            if dev_pre_mem:
+                for cell in instance.numa_topology.cells:
+                    guest.attach_memory_device(cell.id, dev_pre_mem * units.Ki)
+            if dev_extra_mem:
+                guest.attach_memory_device(0, dev_extra_mem * units.Ki)
+
+        if delta['vcpus']:
+            LOG.debug("Live resizing: set vcpus!")
+            guest.set_vcpus_number(flavor.vcpus)
+
+    def _get_live_resize_resource_delta(self, old_flavor, new_flavor,
+                                        image_meta, instance):
+        delta = {'vcpus': None, 'memory': None, 'changes': None}
+        numa_topology = hardware.numa_get_constraints(old_flavor,
+            image_meta)
+        if hasattr(numa_topology, 'cells'):
+            delta['vcpus'] = new_flavor.vcpus - old_flavor.vcpus
+            delta['memory'] = new_flavor.memory_mb - old_flavor.memory_mb
+            delta['changes'] = delta['vcpus'] or delta['memory']
+        else:
+            LOG.error(_('Live-resize with non-numa topology defined '
+                        'is not supported yet.'), instance=instance)
+        return delta
+
+    def live_resize(self, context, instance, old_flavor, new_flavor):
+
+        def live_resize_update_guest_metadata(guest, new_flavor):
+            xmlstr = guest.get_metadata()
+            meta = vconfig.LibvirtConfigGuestMetaNovaInstance()
+            meta.parse_str(xmlstr)
+            meta.flavor.name = new_flavor.name
+            meta.flavor.memory = new_flavor.memory_mb
+            meta.flavor.vcpus = new_flavor.vcpus
+            meta.flavor.ephemeral = new_flavor.ephemeral_gb
+            meta.flavor.disk = new_flavor.root_gb
+            meta.flavor.swap = new_flavor.swap
+            guest.set_metadata(meta.to_xml())
+
+        # Get the system metadata from the instance
+        system_meta = utils.instance_sys_meta(instance)
+        # Convert the system metadata to image metadata
+        meta = utils.get_image_from_system_metadata(system_meta)
+        if not meta:
+            image_ref = instance.get('image_ref')
+            meta = compute_utils.get_image_metadata(context,
+                                                    self._image_api,
+                                                    image_ref,
+                                                    instance)
+        image_meta = objects.ImageMeta.from_dict(meta)
+
+        delta = self._get_live_resize_resource_delta(old_flavor, new_flavor,
+                                                     image_meta, instance)
+
+        try:
+            guest = self._host.get_guest(instance)
+            if delta['changes']:
+                self._live_resize_numa(guest, new_flavor, delta, instance)
+                live_resize_update_guest_metadata(guest, new_flavor)
+        except exception.InstanceNotFound:
+            raise exception.InstanceNotRunning(instance_id=instance.uuid)
+        except Exception as e:
+            with excutils.save_and_reraise_exception():
+                LOG.error(_("Live-resize failed because: %s"), e,
+                          instance=instance)
+
     def _get_console_output_file(self, instance, console_log):
         bytes_to_read = MAX_CONSOLE_BYTES
         log_data = b""  # The last N read bytes
@@ -4353,8 +4424,15 @@ class LibvirtDriver(driver.ComputeDriver):
         if cpu is None:
             return None
 
+        max_vcpus = None
+        if flavor.extra_specs.get('hw:live_resize', False):
+            max_vcpus = flavor.extra_specs.get(
+                'hw:live_resize_max_vcpus',
+                len(self._host.get_online_cpus()) // 2)
+
         topology = hardware.get_best_cpu_topology(
-                flavor, image_meta, numa_topology=instance_numa_topology)
+            flavor, image_meta,
+            numa_topology=instance_numa_topology, max_vcpus=max_vcpus)
 
         cpu.sockets = topology.sockets
         cpu.cores = topology.cores
@@ -5703,6 +5781,18 @@ class LibvirtDriver(driver.ComputeDriver):
         guest.cpuset = guest_numa_config.cpuset
         guest.cputune = guest_numa_config.cputune
         guest.numatune = guest_numa_config.numatune
+
+        if flavor.extra_specs.get('hw:live_resize', False) and guest.numatune:
+            # NOTE(rogeryu): If the maximum CPU and memory are not configured,
+            # half of the maximum value of the current compute node is used as
+            # the default value
+            pcpus_nums = len(self._host.get_online_cpus())
+            # KiB
+            total_pmem = self._host.get_memory_mb_total() * 1024
+            guest.max_vcpus = flavor.extra_specs.get(
+                'hw:live_resize_max_vcpus', pcpus_nums // 2)
+            guest.max_memory_size = flavor.extra_specs.get(
+                'hw:live_resize_max_memory', total_pmem // 2)
 
         guest.membacking = self._get_guest_memory_backing_config(
             instance.numa_topology,

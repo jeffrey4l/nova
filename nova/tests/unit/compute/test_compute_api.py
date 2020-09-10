@@ -2313,6 +2313,86 @@ class _ComputeAPIUnitTestMixIn(object):
         else:
             self.fail("Exception not raised")
 
+    @mock.patch('nova.compute.api.API.get_instance_host_status',
+                new=mock.Mock(return_value=fields_obj.HostStatus.UP))
+    @mock.patch.object(flavors, 'get_flavor_by_flavor_id')
+    def _test_live_resize_exception(self, mock_get_flavor_by_id, exc,
+                                    instance=None, disabled=False):
+        instance = instance or self._create_instance_obj()
+        new_flavor = self._create_flavor(id=200, flavorid='new-flavor-id',
+                                         name='new_flavor', disabled=disabled)
+        new_flavor.extra_specs = {'hw:live_resize': True,
+                                  'hw:numa_nodes': 1}
+        mock_get_flavor_by_id.return_value = new_flavor
+
+        self.assertRaises(exc, self.compute_api.live_resize,
+                          self.context, instance, flavor_id='new-flavor-id')
+
+    def test_live_resize_same_flavor(self):
+        self.compute_api._cell_type = 'api'
+        instance = self._create_instance_obj()
+        current_flavor = instance.get_flavor()
+        current_flavor.id = 200
+
+        self._test_live_resize_exception(
+            exc=exception.CannotResizeToSameFlavor, instance=instance)
+
+    def test_live_resize_disabled_flavor(self):
+        self._test_live_resize_exception(exc=exception.FlavorNotFound,
+                                         disabled=True)
+
+    @mock.patch('nova.compute.api.API.get_instance_host_status',
+                new=mock.Mock(return_value=fields_obj.HostStatus.UP))
+    @mock.patch.object(objects.Quotas, 'check_deltas')
+    @mock.patch.object(compute_api.API, '_get_image')
+    def test_live_resize_over_quota(self, mock_get_image, mock_check_deltas):
+        mock_get_image.return_value = (mock.sentinel.image_id,
+                                       mock.sentinel.image)
+        mock_check_deltas.side_effect = exception.OverQuota(
+            overs=[], quotas={}, usages=mock.sentinel.usages)
+        instance = self._create_instance_obj()
+        current_flavor = instance.get_flavor()
+        current_flavor.memory_mb /= 2
+        current_flavor.extra_specs = {'hw:live_resize': True,
+                                      'hw:numa_nodes': 1}
+        self._test_live_resize_exception(exc=exception.TooManyInstances,
+                                         instance=instance)
+
+    @mock.patch('nova.compute.api.API.get_instance_host_status',
+                new=mock.Mock(return_value=fields_obj.HostStatus.UP))
+    @mock.patch.object(compute_api.API, '_record_action_start')
+    @mock.patch.object(objects.Quotas, 'check_deltas')
+    @mock.patch.object(compute_api.API, '_get_image')
+    @mock.patch.object(flavors, 'get_flavor_by_flavor_id')
+    def test_live_resize(self, mock_get_flavor, mock_get_image,
+                         mock_check_deltas, mock_record_action):
+        instance = self._create_instance_obj()
+        instance.save = mock.MagicMock()
+        current_flavor = instance.get_flavor()
+        current_flavor.extra_specs = {'hw:live_resize': True,
+                                      'hw:numa_nodes': 1}
+        new_flavor = self._create_flavor(id=200, flavorid='new-flavor-id',
+                                         name='new_flavor', disabled=False,
+                                         memory_mb=640)
+        new_flavor.extra_specs = {'hw:live_resize': True,
+                                  'hw:numa_nodes': 1}
+
+        mock_get_flavor.return_value = new_flavor
+        mock_get_image.return_value = (mock.sentinel.image_id,
+                                       mock.sentinel.image)
+
+        with mock.patch.object(self.compute_api.compute_task_api,
+                               'live_resize_instance') as mock_live_resize:
+            self.compute_api.live_resize(self.context, instance,
+                                         'new-flavor-id')
+        filter_properties = {'filter_properties': {'ignore_hosts': []}}
+
+        self.assertEqual(task_states.LIVE_RESIZING, instance.task_state)
+        self.assertEqual(0, instance.progress)
+        mock_live_resize.assert_called_once_with(
+            self.context, instance, flavor=new_flavor,
+            scheduler_hint=filter_properties)
+
     @mock.patch.object(compute_api.API, '_record_action_start')
     @mock.patch.object(objects.Instance, 'save')
     def test_pause(self, mock_save, mock_record):

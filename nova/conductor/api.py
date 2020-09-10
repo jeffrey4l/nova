@@ -95,6 +95,11 @@ class ComputeTaskAPI(object):
             reservations=reservations, clean_shutdown=clean_shutdown,
             request_spec=request_spec, host_list=host_list)
 
+    def live_resize_instance(self, context, instance, scheduler_hint,
+                             flavor, request_spec=None):
+        self.conductor_compute_rpcapi.live_resize_instance(
+            context, instance, scheduler_hint, flavor)
+
     def live_migrate_instance(self, context, instance, host_name,
                               block_migration, disk_over_commit,
                               request_spec=None, async_=False):

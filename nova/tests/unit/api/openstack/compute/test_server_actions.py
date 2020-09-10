@@ -1245,3 +1245,126 @@ class ServerActionsControllerTestV21(test.TestCase):
             FAKE_UUID, self.controller.network_api)
         mock_get_service.assert_called_once_with(
             self.req.environ['nova.context'], 'fake_host', 'nova-compute')
+
+    @mock.patch('nova.compute.api.API.live_resize')
+    @mock.patch('nova.compute.api.API.get')
+    def test_live_resize(self, mock_get, mock_live_resize):
+        body = {'liveResize': {'flavorRef': 'fake-flavor'}}
+        req = fakes.HTTPRequest.blank('', version='2.66')
+
+        self.controller._action_live_resize(req, FAKE_UUID, body=body)
+
+        mock_live_resize.assert_called_once_with(
+            req.environ['nova.context'], mock_get.return_value, 'fake-flavor')
+
+    @mock.patch('nova.compute.api.API.get')
+    def test_live_resize_unauthorized(self, mock_get):
+        self.policy.set_rules(
+            {'os_compute_api:servers:live_resize': "project:non_fake"})
+        body = {'liveResize': {'flavorRef': 'fake-flavor'}}
+        req = fakes.HTTPRequest.blank('', version='2.66')
+
+        self.assertRaises(nova.exception.PolicyNotAuthorized,
+                          self.controller._action_live_resize,
+                          req, FAKE_UUID, body=body)
+
+    def _check_live_resize_validation_error(self, live_resize_dict):
+        body = {'liveResize': live_resize_dict}
+        req = fakes.HTTPRequest.blank('', version='2.66')
+
+        self.assertRaises(self.validation_error,
+                          self.controller._action_live_resize,
+                          req, FAKE_UUID, body=body)
+
+    def test_live_resize_no_flavor(self):
+        self._check_live_resize_validation_error({})
+
+    def test_live_resize_no_flavor_ref(self):
+        self._check_live_resize_validation_error({'flavorRef': None})
+
+    def test_live_resize_with_extra_arg(self):
+        self._check_live_resize_validation_error(
+            {'flavorRef': 'fake-flavor', 'extra_arg': 'ument'})
+
+    def test_live_resize_server_invalid_flavor_ref(self):
+        self._check_live_resize_validation_error({'flavorRef': 4.2})
+
+    @mock.patch('nova.compute.api.API.get')
+    def test_live_resize_with_server_not_found(self, mock_get):
+        body = {'liveResize': {'flavorRef': 'fake-flavor'}}
+        mock_get.side_effect = exception.InstanceNotFound(
+            instance_id=FAKE_UUID)
+        req = fakes.HTTPRequest.blank('', version='2.66')
+
+        self.assertRaises(webob.exc.HTTPNotFound,
+                          self.controller._action_live_resize,
+                          req, FAKE_UUID, body=body)
+
+    @mock.patch('nova.compute.api.API.live_resize')
+    def _check_live_resize_exception(self, mock_live_resize, exc,
+                                            expected_exc):
+        body = {'liveResize': {'flavorRef': 'fake-flavor'}}
+        mock_live_resize.side_effect = exc
+        req = fakes.HTTPRequest.blank('', version='2.66')
+
+        self.assertRaises(expected_exc,
+                          self.controller._action_live_resize,
+                          req, FAKE_UUID, body=body)
+
+    def test_live_resize_quota_error(self):
+        self._check_live_resize_exception(
+            exc=exception.QuotaError,
+            expected_exc=webob.exc.HTTPForbidden)
+
+    def test_live_resize_instance_locked(self):
+        self._check_live_resize_exception(
+            exc=exception.InstanceIsLocked(instance_uuid='some_uuid'),
+            expected_exc=webob.exc.HTTPConflict)
+
+    def test_live_resize_invalid_state(self):
+        exc = exception.InstanceInvalidState(
+            attr='fake_attr', state='fake_state', method='fake_method',
+            instance_uuid='fake')
+        self._check_live_resize_exception(
+            exc=exc, expected_exc=webob.exc.HTTPConflict)
+
+    def test_live_resize_image_not_authorized(self):
+        self._check_live_resize_exception(
+            exc=exception.ImageNotAuthorized(image_id='some_image_id'),
+            expected_exc=webob.exc.HTTPUnauthorized)
+
+    def test_live_resize_image_not_found(self):
+        self._check_live_resize_exception(
+            exc=exception.ImageNotFound(image_id='some_image_id'),
+            expected_exc=webob.exc.HTTPBadRequest)
+
+    def test_live_resize_auto_disk_config_disabled(self):
+        self._check_live_resize_exception(
+            exc=exception.AutoDiskConfigDisabledByImage(image='nation'),
+            expected_exc=webob.exc.HTTPBadRequest)
+
+    def test_live_resize_same_flavor(self):
+        self._check_live_resize_exception(
+            exc=exception.CannotResizeToSameFlavor,
+            expected_exc=webob.exc.HTTPBadRequest)
+
+    def test_live_resize_smaller_flavor(self):
+        self._check_live_resize_exception(
+            exc=exception.CannotLiveResizeToSmallerFlavor(
+                current_flavor='current_flavor', new_flavor='new_flavor'),
+            expected_exc=webob.exc.HTTPBadRequest)
+
+    def test_live_resize_raises_flavor_not_found(self):
+        self._check_live_resize_exception(
+            exc=exception.FlavorNotFound(reason='', flavor_id='fake_id'),
+            expected_exc=webob.exc.HTTPBadRequest)
+
+    def test_live_resize_no_valid_host(self):
+        self._check_live_resize_exception(
+            exc=exception.NoValidHost(reason=''),
+            expected_exc=webob.exc.HTTPBadRequest)
+
+    def test_live_resize_invalid(self):
+        self._check_live_resize_exception(
+            exc=exception.Invalid,
+            expected_exc=webob.exc.HTTPBadRequest)

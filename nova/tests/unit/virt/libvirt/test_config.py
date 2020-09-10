@@ -2599,6 +2599,8 @@ class LibvirtConfigGuestTest(LibvirtConfigBaseTest):
         obj.virt_type = "kvm"
         obj.memory = 100 * units.Mi
         obj.vcpus = 2
+        obj.max_vcpus = 4
+        obj.max_memory_size = 200 * units.Mi
         obj.name = "demo"
         obj.uuid = "b38a3f43-4be2-4046-897f-b67c2f5e0147"
         obj.os_type = "hvm"
@@ -2610,7 +2612,8 @@ class LibvirtConfigGuestTest(LibvirtConfigBaseTest):
               <uuid>b38a3f43-4be2-4046-897f-b67c2f5e0147</uuid>
               <name>demo</name>
               <memory>104857600</memory>
-              <vcpu>2</vcpu>
+              <maxMemory slots='16'>209715200</maxMemory>
+              <vcpu current="2">4</vcpu>
               <os>
                 <type machine="fake_machine_type">hvm</type>
               </os>

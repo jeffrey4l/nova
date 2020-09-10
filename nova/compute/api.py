@@ -3746,6 +3746,55 @@ class API(base.Base):
             request_spec=request_spec)
 
     @check_instance_lock
+    @check_instance_state(vm_state=[vm_states.ACTIVE,
+                                    vm_states.SUSPENDED,
+                                    vm_states.PAUSED])
+    @check_instance_host(check_is_up=True)
+    def live_resize(self, context, instance, flavor_id):
+        current_instance_type = instance.get_flavor()
+        new_instance_type = flavors.get_flavor_by_flavor_id(
+            flavor_id, read_deleted="no")
+        if not new_instance_type or new_instance_type.disabled:
+            raise exception.FlavorNotFound(flavor_id=flavor_id)
+        if current_instance_type.id == new_instance_type.id:
+            raise exception.CannotResizeToSameFlavor()
+        if (current_instance_type.vcpus > new_instance_type.vcpus or
+            current_instance_type.memory_mb > new_instance_type.memory_mb):
+            raise exception.CannotLiveResizeToSmallerFlavor(
+                current_flavor=current_instance_type,
+                new_flavor=new_instance_type)
+        # NOTE(rogeryu): Linux requires memory hotplug in sizes of 128Mib
+        # or any multiple of it.
+        if (new_instance_type.memory_mb -
+            current_instance_type.memory_mb) % 128 != 0:
+            raise exception.LiveResizeMemoryDeltaError(
+                current_memory=current_instance_type.memory_mb,
+                new_memory=new_instance_type.memory_mb)
+        if (not current_instance_type.extra_specs.get(
+                'hw:live_resize', False) or
+            new_instance_type.extra_specs.get('hw:numa_nodes', None) is None):
+            raise exception.LiveResizeConfigurationError(
+                current_flavor=current_instance_type,
+                new_flavor=new_instance_type)
+
+        if new_instance_type:
+            self._check_quota_for_upsize(context, instance,
+                                         current_instance_type,
+                                         new_instance_type)
+
+        instance.task_state = task_states.LIVE_RESIZING
+        instance.progress = 0
+        instance.save(expected_task_state=[None])
+
+        filter_properties = {'ignore_hosts': []}
+
+        self._record_action_start(context, instance,
+                                  instance_actions.LIVE_RESIZE)
+        scheduler_hint = {'filter_properties': filter_properties}
+        self.compute_task_api.live_resize_instance(context, instance,
+            flavor=new_instance_type, scheduler_hint=scheduler_hint)
+
+    @check_instance_lock
     @check_instance_state(vm_state=[vm_states.ACTIVE, vm_states.STOPPED,
                                     vm_states.PAUSED, vm_states.SUSPENDED])
     def shelve(self, context, instance, clean_shutdown=True):

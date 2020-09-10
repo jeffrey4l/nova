@@ -21450,6 +21450,75 @@ class LibvirtDriverTestCase(test.NoDBTestCase, TraitsComparisonMixin):
             mock_rmtree.assert_has_calls([mock.call('/fake/inst_resize',
                                                     ignore_errors=True)] * 5)
 
+    @mock.patch.object(host.Host, "get_guest")
+    def test_live_resize_success(self, mock_get_guest):
+        guest = libvirt_guest.Guest("domain")
+        mock_get_guest.return_value = guest
+        instance = self._create_instance()
+        o_flavor = objects.Flavor(memory_mb=1024, vcpus=2, root_gb=10, id=1,
+                                  ephemeral_gb=20, swap=0, name='m1.resize1',
+                                  flavorid='1', extra_specs={})
+
+        n_flavor = objects.Flavor(memory_mb=1024, vcpus=4, root_gb=10, id=2,
+                                  ephemeral_gb=20, swap=0, name='m1.resize2',
+                                  flavorid='2', extra_specs={})
+
+        image_meta = {"disk_format": "raw",
+                      "properties": {"hw_disk_bus": "ide"}}
+
+        fake_delta = {"vcpus": 2, "changes": 2, "memory": 0, "disk": 0}
+
+        inst_meta = ("<instance>"
+                     "<package version='13.0.0'/>"
+                     "<name>server</name>"
+                     "<creationTime>2016-01-26 05:48:41</creationTime>"
+                     "<flavor name='m1.resize1'>"
+                     "<memory>1024</memory>"
+                     "<disk>10</disk>"
+                     "<swap>0</swap>"
+                     "<ephemeral>20</ephemeral>"
+                     "<vcpus>2</vcpus>"
+                     "</flavor>"
+                     "<owner>"
+                     "<user uuid='ecd9'>tacker</user>"
+                     "<project uuid='b9ff'>service</project>"
+                     "</owner>"
+                     "<root type='image' uuid='abcd'/>"
+                     "</instance>")
+
+        with test.nested(
+                mock.patch.object(objects.Flavor, "get_by_id",
+                                  return_value=o_flavor),
+                mock.patch.object(utils,
+                                  'get_image_from_system_metadata',
+                                  return_value=image_meta),
+                mock.patch.object(libvirt_guest.Guest,
+                                  'get_metadata',
+                                  return_value=inst_meta),
+                mock.patch.object(libvirt_guest.Guest,
+                                  'set_vcpus_number',
+                                  return_value=None),
+                mock.patch.object(libvirt_guest.Guest,
+                                  'set_metadata',
+                                  return_value=None),
+                mock.patch.object(libvirt_driver.LibvirtDriver,
+                                  '_get_live_resize_resource_delta',
+                                  return_value=fake_delta),
+
+                ) as (mock_get_id, mock_system_metadata,
+                      mock_get_metadata, mock_set_vcpus,
+                      mock_set_metadata, mac_live_resize_delta):
+
+            self.drvr.live_resize(self.context,
+                                  instance,
+                                  o_flavor,
+                                  n_flavor)
+            mock_set_vcpus.assert_called_once_with(4)
+            self.assertIn('<nova:flavor name="m1.resize2">',
+                          mock_set_metadata.call_args[0][0])
+            self.assertIn("<nova:vcpus>4</nova:vcpus>",
+                          mock_set_metadata.call_args[0][0])
+
     def test_get_instance_disk_info_exception(self):
         instance = self._create_instance()
 

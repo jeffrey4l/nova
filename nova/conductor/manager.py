@@ -37,6 +37,7 @@ from nova.compute import utils as compute_utils
 from nova.compute.utils import wrap_instance_event
 from nova.compute import vm_states
 from nova.conductor.tasks import live_migrate
+from nova.conductor.tasks import live_resize
 from nova.conductor.tasks import migrate
 from nova import context as nova_context
 from nova.db import base
@@ -411,6 +412,57 @@ class ComputeTaskManager(base.Base):
             # exception will be raised by instance.save()
             pass
 
+    @messaging.expected_exceptions(exception.ComputeServiceUnavailable,
+                                   exception.ComputeHostNotFound,
+                                   exception.DestinationHypervisorTooOld,
+                                   exception.InvalidLocalStorage,
+                                   exception.InvalidSharedStorage,
+                                   exception.HypervisorUnavailable,
+                                   exception.InstanceInvalidState)
+    @targets_cell
+    @wrap_instance_event(prefix='conductor')
+    def live_resize_instance(self, context, instance, scheduler_hint, flavor):
+        if instance and not isinstance(instance, nova_object.NovaObject):
+            # NOTE(danms): Until v2 of the RPC API, we need to tolerate
+            # old-world instance objects here
+            attrs = ['metadata', 'system_metadata', 'info_cache',
+                     'security_groups']
+            instance = objects.Instance._from_db_object(
+                context, objects.Instance(), instance,
+                expected_attrs=attrs)
+        # NOTE: Remove this when we drop support for v1 of the RPC API
+        if flavor and not isinstance(flavor, objects.Flavor):
+            # Code downstream may expect extra_specs to be populated since it
+            # is receiving an object, so lookup the flavor to ensure this.
+            flavor = objects.Flavor.get_by_id(context, flavor['id'])
+
+        image = utils.get_image_from_system_metadata(
+            instance.system_metadata)
+
+        request_spec = self._get_request_spec_for_cold_migrate(
+            context, instance, flavor,
+            scheduler_hint['filter_properties'], None)
+
+        task = self._build_live_resize_task(
+            context, instance, flavor, image,
+            request_spec)
+        try:
+            task.execute()
+        except Exception as ex:
+            with excutils.save_and_reraise_exception():
+                updates = {'vm_state': vm_states.ERROR,
+                           'task_state': None}
+                self._set_vm_state_and_notify(context, instance.uuid,
+                                              'live_resize',
+                                              updates, ex, request_spec)
+
+    def _live_resize_instance_to_other_host(self):
+        # TODO(rogeryu): Live resize to other comput nodes has not been
+        # implemented. The expected process is as follows: When current node
+        # is short of resources or other hosts are specified, it will be
+        # live migrated to other nodes before live resizing
+        pass
+
     @targets_cell
     @wrap_instance_event(prefix='conductor')
     def live_migrate_instance(self, context, instance, scheduler_hint,
@@ -496,6 +548,13 @@ class ComputeTaskManager(base.Base):
                                               self.query_client,
                                               self.report_client,
                                               request_spec)
+
+    def _build_live_resize_task(self, context, instance, flavor, image,
+                                request_spec):
+        return live_resize.LiveResizeTask(context, instance, flavor, image,
+                                          request_spec,
+                                          self.query_client,
+                                          self.compute_rpcapi)
 
     def _build_cold_migrate_task(self, context, instance, flavor, request_spec,
             clean_shutdown, host_list):

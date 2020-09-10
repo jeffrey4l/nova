@@ -101,7 +101,8 @@ class ServersController(wsgi.Controller):
         if 'server' not in robj.obj:
             return robj
 
-        link = [l for l in robj.obj['server']['links'] if l['rel'] == 'self']
+        link = [link for link in robj.obj['server']['links']
+                if link['rel'] == 'self']
         if link:
             robj['Location'] = link[0]['href']
 
@@ -1041,6 +1042,55 @@ class ServersController(wsgi.Controller):
         helpers.translate_attributes(helpers.RESIZE, resize_dict, kwargs)
 
         self._resize(req, id, flavor_ref, **kwargs)
+
+    @wsgi.response(202)
+    @wsgi.expected_errors((400, 401, 403, 404, 409))
+    @wsgi.action('liveResize')
+    @validation.schema(schema_servers.live_resize)
+    def _action_live_resize(self, req, id, body):
+        """Live resizes a given instance to the flavor size requested."""
+        live_resize_dict = body['liveResize']
+        flavor_ref = str(live_resize_dict["flavorRef"])
+
+        context = req.environ["nova.context"]
+        instance = self._get_server(context, req, id)
+        context.can(server_policies.SERVERS % 'live_resize',
+                    target={'user_id': instance.user_id,
+                            'project_id': instance.project_id})
+
+        try:
+            self.compute_api.live_resize(context, instance, flavor_ref)
+        except exception.QuotaError as error:
+            raise exc.HTTPForbidden(
+                explanation=error.format_message())
+        except (exception.InstanceIsLocked,
+                exception.AllocationMoveFailed,
+                exception.InstanceNotReady,
+                exception.ServiceUnavailable) as e:
+            raise exc.HTTPConflict(explanation=e.format_message())
+        except exception.InstanceInvalidState as state_error:
+            common.raise_http_conflict_for_instance_invalid_state(state_error,
+                    'live_resize', id)
+        except exception.ImageNotAuthorized:
+            msg = _("You are not authorized to access the image "
+                    "the instance was started with.")
+            raise exc.HTTPUnauthorized(explanation=msg)
+        except exception.ImageNotFound:
+            msg = _("Image that the instance was started "
+                    "with could not be found.")
+            raise exc.HTTPBadRequest(explanation=msg)
+        except (exception.CannotLiveResizeToSmallerFlavor,
+                exception.CannotResizeToSameFlavor,
+                exception.FlavorNotFound,
+                exception.NoValidHost,
+                exception.LiveResizeConfigurationError,
+                exception.LiveResizeMemoryDeltaError) as e:
+            raise exc.HTTPBadRequest(explanation=e.format_message())
+        except INVALID_FLAVOR_IMAGE_EXCEPTIONS as e:
+            raise exc.HTTPBadRequest(explanation=e.format_message())
+        except exception.Invalid:
+            msg = _("Invalid instance image.")
+            raise exc.HTTPBadRequest(explanation=msg)
 
     @wsgi.response(202)
     @wsgi.expected_errors((400, 403, 404, 409))
