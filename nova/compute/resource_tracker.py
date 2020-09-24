@@ -368,6 +368,7 @@ class ResourceTracker(object):
             new_resources=claimed_resources)
 
         instance.migration_context = mig_context
+        instance.numa_topology = claim.claimed_numa_topology
         instance.save()
 
         # Mark the resources in-use for the resize landing on this

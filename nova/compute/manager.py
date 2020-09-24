@@ -4887,8 +4887,6 @@ class ComputeManager(manager.Manager):
             instance.flavor = instance_type
             instance.vcpus = instance_type.vcpus
             instance.memory_mb = instance_type.memory_mb
-            instance.numa_topology = hardware.numa_get_constraints(
-                instance_type, instance.image_meta)
             instance.save(expected_task_state=None)
 
             bdms = objects.BlockDeviceMappingList.get_by_instance_uuid(
