@@ -4341,6 +4341,12 @@ class LibvirtDriver(driver.ComputeDriver):
         extra_flags = set([flag.lower() for flag in
             CONF.libvirt.cpu_model_extra_flags])
 
+        model = None
+        if (flavor and flavor.extra_specs.get('hw:cpu_mode') and
+            flavor.extra_specs.get('hw:cpu_model')):
+            mode = flavor.extra_specs.get('hw:cpu_mode')
+            model = flavor.extra_specs.get('hw:cpu_model')
+
         if (CONF.libvirt.virt_type == "kvm" or
             CONF.libvirt.virt_type == "qemu"):
             if mode is None:
@@ -4369,13 +4375,17 @@ class LibvirtDriver(driver.ComputeDriver):
 
         cpu = vconfig.LibvirtConfigGuestCPU()
         cpu.mode = mode
-        cpu.model = models[0] if models else None
+        if model:
+            cpu.model = model
+        else:
+            cpu.model = models[0] if models else None
 
         # compare flavor trait and cpu models, select the first mathched model
         if flavor and mode == "custom":
             flags = libvirt_utils.get_flags_by_flavor_specs(flavor)
             if flags:
-                cpu.model = self._match_cpu_model_by_flags(models, flags)
+                cpu.model = self._match_cpu_model_by_flags(
+                    [model] if model else models, flags)
 
         LOG.debug("CPU mode '%(mode)s' models '%(models)s' was chosen, "
                   "with extra flags: '%(extra_flags)s'",

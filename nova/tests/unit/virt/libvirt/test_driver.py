@@ -7274,6 +7274,48 @@ class LibvirtConnTestCase(test.NoDBTestCase,
                                       vconfig.LibvirtConfigGuestVideo)
                 self.assertEqual(cfg.devices[device_index].type, 'vga')
 
+    def test_get_guest_cpu_mode_config_setting_by_flavor(self):
+        self.flags(cpu_mode="none",
+                   group='libvirt')
+        drvr = libvirt_driver.LibvirtDriver(fake.FakeVirtAPI(), True)
+        instance_ref = objects.Instance(**self.test_instance)
+        instance_ref.flavor.extra_specs = {"hw:cpu_mode": "custom",
+                                           "hw:cpu_model": "Penryn"}
+        image_meta = objects.ImageMeta.from_dict(self.test_image_meta)
+        disk_info = blockinfo.get_disk_info(CONF.libvirt.virt_type,
+                                            instance_ref, image_meta)
+
+        conf = drvr._get_guest_config(instance_ref,
+                                      _fake_network_info(self, 1),
+                                      image_meta, disk_info)
+        self.assertIsInstance(conf.cpu,
+                              vconfig.LibvirtConfigGuestCPU)
+        self.assertEqual(conf.cpu.mode, "custom")
+        self.assertEqual(conf.cpu.model, "Penryn")
+        self.assertEqual(conf.cpu.sockets, instance_ref.flavor.vcpus)
+        self.assertEqual(conf.cpu.cores, 1)
+        self.assertEqual(conf.cpu.threads, 1)
+
+    def test_get_guest_cpu_mode_config_setting_by_flavor_with_feature(self):
+        self.flags(cpu_mode="none",
+                   group='libvirt')
+        drvr = libvirt_driver.LibvirtDriver(fake.FakeVirtAPI(), True)
+        instance_ref = objects.Instance(**self.test_instance)
+        instance_ref.flavor.extra_specs = {"hw:cpu_mode": "custom",
+                                           "hw:cpu_model": "Penryn",
+                                           "trait:HW_CPU_X86_AVX2": "required",
+                                           "trait:HW_CPU_X86_AVX": "required"}
+        image_meta = objects.ImageMeta.from_dict(self.test_image_meta)
+        disk_info = blockinfo.get_disk_info(CONF.libvirt.virt_type,
+                                            instance_ref, image_meta)
+
+        self.assertRaises(exception.InvalidCPUInfo,
+                          drvr._get_guest_config,
+                          instance_ref,
+                          _fake_network_info(self, 1),
+                          image_meta,
+                          disk_info)
+
     def test_get_guest_config_ppc64_through_image_meta_vnc_enabled(self):
         self.flags(enabled=True, group='vnc')
         self._test_get_guest_config_ppc64(5)
