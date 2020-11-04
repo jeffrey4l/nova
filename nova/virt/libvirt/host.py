@@ -169,7 +169,7 @@ class Host(object):
             watchdog_et = xml_et.find('devices').find('watchdog')
 
             if not watchdog_et or watchdog_et.get('action') != 'reset':
-                return
+                continue
             if not self.vms_watchdog_last.get(guest.uuid, None):
                 LOG.debug(
                     'The vm : %s not start watchdog service',
@@ -178,6 +178,9 @@ class Host(object):
 
             last_check = self.vms_watchdog_last[guest.uuid]
             difftime = timeutils.utcnow() - last_check
+            LOG.debug("Doesn't receive heatbeat from VM %s for %d seconds",
+                      guest,
+                      difftime.total_seconds())
             if difftime.total_seconds() > self.start_error_time:
                 guest._domain.reset()
                 LOG.info('The vm : %s reseted', guest.uuid)
