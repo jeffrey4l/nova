@@ -311,6 +311,11 @@ class VolumeNotCreated(NovaException):
                 " attempts. And its status is %(volume_status)s.")
 
 
+class FailedCreateVolume(NovaException):
+    msg_fmt = _("Failed create root volume from image %(image_id)s when"
+                " rebuilding instance %(instance_uuid)s")
+
+
 class ExtendVolumeNotSupported(Invalid):
     msg_fmt = _("Volume size extension is not supported by the hypervisor.")
 

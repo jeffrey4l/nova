@@ -3301,16 +3301,6 @@ class API(base.Base):
             volume_image_metadata = volume.get('volume_image_metadata', {})
             orig_image_ref = volume_image_metadata.get('image_id')
 
-            if orig_image_ref != image_href:
-                # Leave a breadcrumb.
-                LOG.debug('Requested to rebuild instance with a new image %s '
-                          'for a volume-backed server with image %s in its '
-                          'root volume which is not supported.', image_href,
-                          orig_image_ref, instance=instance)
-                msg = _('Unable to rebuild with a different image for a '
-                        'volume-backed server.')
-                raise exception.ImageUnacceptable(
-                    image_id=image_href, reason=msg)
         else:
             orig_image_ref = instance.image_ref
 

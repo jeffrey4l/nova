@@ -5219,7 +5219,90 @@ class ComputeManagerUnitTestCase(test.NoDBTestCase,
                                                     mock.ANY, mock.ANY)
             mock_get_nw_info.assert_called_once_with(self.context, instance)
 
-    def test_rebuild_default_impl(self):
+    @mock.patch('nova.compute.manager.ComputeManager._attach_new_root_bdm')
+    @mock.patch(
+        'nova.compute.manager.ComputeManager._await_block_device_map_created')
+    @mock.patch('nova.volume.cinder.API.create')
+    @mock.patch('nova.volume.cinder.API.get')
+    def test_reset_root_volume(
+        self, get_volume, create_volume, await_bdm_create, attach_new_bdm):
+        old_volume = {
+            'id': uuids.old_volume_id, 'size': 1, 'status': 'reserved',
+            'display_name': 'volume_1', 'display_description': '',
+            'snapshot_id': 1, 'volume_type_id': 1, 'volume_metadata': '',
+            'availability_zone': 'nova', 'migration_status': 'migrating',
+            'multiattach': False
+        }
+        new_volume = {
+            'id': uuids.new_volume_id, 'size': 1, 'status': 'reserved',
+            'display_name': 'volume_1', 'display_description': '',
+            'snapshot_id': 1, 'volume_type_id': 1, 'volume_metadata': '',
+            'availability_zone': 'nova', 'migration_status': 'migrating',
+            'multiattach': False
+        }
+        bdm = objects.BlockDeviceMapping(
+            volume_id=uuids.old_volume_id, device_name='/dev/vda',
+            attachment_id=uuids.old_attachment_id,
+            connection_info='{"data": {}}', volume_size=1)
+        get_volume.return_value = old_volume
+        create_volume.return_value = new_volume
+        await_bdm_create.return_value = 2
+        attach_new_bdm.return_value = (uuids.new_attachment_id, {"data": {}})
+        instance = fake_instance.fake_instance_obj(self.context)
+
+        with test.nested(
+            mock.patch.object(bdm, 'update'),
+            mock.patch.object(bdm, 'save')
+        ) as (
+              mock_update,
+              mock_save
+        ):
+            self.compute._reset_root_bdm(
+                self.context, instance, uuids.image_id, bdm)
+            attach_new_bdm.assert_called_with(
+                self.context, instance, new_volume, bdm)
+            get_volume.assert_called_once_with(
+                self.context, uuids.old_volume_id)
+            mock_update.assert_called_once()
+            mock_save.assert_called_once()
+
+    @mock.patch('nova.volume.cinder.API.attachment_delete')
+    @mock.patch('nova.volume.cinder.API.attachment_update')
+    @mock.patch('nova.volume.cinder.API.attachment_create')
+    def test_attach_new_root_bdm(
+            self, attachment_create, attachment_update,
+            attachment_delete):
+        bdm = objects.BlockDeviceMapping(
+            volume_id=uuids.old_volume_id, device_name='/dev/vda',
+            attachment_id=uuids.old_attachment_id,
+            connection_info='{"data": {}}', volume_size=1)
+        new_volume = {
+            'id': uuids.new_volume_id, 'size': 1, 'status': 'available',
+            'migration_status': 'migrating', 'multiattach': False
+        }
+        attachment_create.return_value = {'id': uuids.new_attachment_id}
+        attachment_update.return_value = {"connection_info": {"data": {}}}
+        instance = fake_instance.fake_instance_obj(self.context)
+        with mock.patch.object(
+            self.compute.driver,
+            'get_volume_connector',
+            return_value=mock.sentinel.connector) as mock_get_volume_connector:
+
+            new_at_id, new_c_info = self.compute._attach_new_root_bdm(
+                self.context, instance, new_volume, bdm)
+            mock_get_volume_connector.assert_called_once_with(instance)
+            attachment_create.assert_called_once_with(
+                self.context, new_volume['id'], instance.uuid)
+            attachment_update.assert_called_once_with(
+                self.context, uuids.new_attachment_id, mock.sentinel.connector,
+                bdm.device_name)
+            attachment_delete.assert_called_once_with(
+                self.context, uuids.old_attachment_id)
+            self.assertEqual(new_c_info, {"data": {}})
+            self.assertEqual(new_at_id, uuids.new_attachment_id)
+
+    @mock.patch.object(compute_utils, 'is_volume_backed_instance')
+    def test_rebuild_default_impl(self, mock_is_bfv):
         def _detach(context, bdms):
             # NOTE(rpodolyaka): check that instance has been powered off by
             # the time we detach block devices, exact calls arguments will be
@@ -5251,6 +5334,7 @@ class ComputeManagerUnitTestCase(test.NoDBTestCase,
              mock_save,
              mock_power_off
         ):
+            mock_is_bfv.return_value = False
             instance = fake_instance.fake_instance_obj(self.context)
             instance.migration_context = None
             instance.numa_topology = None

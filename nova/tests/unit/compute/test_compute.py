@@ -2768,7 +2768,8 @@ class ComputeTestCase(BaseTestCase,
         instance = db.instance_get_by_uuid(self.context, instance.uuid)
         self.assertEqual(vm_states.ERROR, instance.vm_state)
 
-    def test_rebuild(self):
+    @mock.patch.object(compute_utils, 'is_volume_backed_instance')
+    def test_rebuild(self, mock_is_bfv):
         # Ensure instance can be rebuilt.
         instance = self._create_fake_instance_obj()
         image_ref = instance['image_ref']
@@ -2778,6 +2779,7 @@ class ComputeTestCase(BaseTestCase,
                                             block_device_mapping=[])
         db.instance_update(self.context, instance['uuid'],
                            {"task_state": task_states.REBUILDING})
+        mock_is_bfv.return_value = False
         self.compute.rebuild_instance(self.context, instance,
                                       image_ref, image_ref,
                                       injected_files=[],
@@ -2881,7 +2883,8 @@ class ComputeTestCase(BaseTestCase,
         self.assertTrue(called['rebuild'])
         self.compute.terminate_instance(self.context, instance, [])
 
-    def test_rebuild_no_image(self):
+    @mock.patch.object(compute_utils, 'is_volume_backed_instance')
+    def test_rebuild_no_image(self, mock_is_bfv):
         # Ensure instance can be rebuilt when started with no image.
         params = {'image_ref': ''}
         instance = self._create_fake_instance_obj(params)
@@ -2891,6 +2894,7 @@ class ComputeTestCase(BaseTestCase,
                                             block_device_mapping=[])
         db.instance_update(self.context, instance['uuid'],
                            {"task_state": task_states.REBUILDING})
+        mock_is_bfv.return_value = False
         self.compute.rebuild_instance(self.context, instance,
                                       '', '', injected_files=[],
                                       new_pass="new_password",
@@ -2901,7 +2905,8 @@ class ComputeTestCase(BaseTestCase,
                                       request_spec=None)
         self.compute.terminate_instance(self.context, instance, [])
 
-    def test_rebuild_launched_at_time(self):
+    @mock.patch.object(compute_utils, 'is_volume_backed_instance')
+    def test_rebuild_launched_at_time(self, mock_is_bfv):
         # Ensure instance can be rebuilt.
         old_time = datetime.datetime(2012, 4, 1)
         cur_time = datetime.datetime(2012, 12, 21, 12, 21)
@@ -2914,6 +2919,7 @@ class ComputeTestCase(BaseTestCase,
         time_fixture.advance_time_delta(cur_time - old_time)
         db.instance_update(self.context, instance['uuid'],
                            {"task_state": task_states.REBUILDING})
+        mock_is_bfv.return_value = False
         self.compute.rebuild_instance(self.context, instance,
                                       image_ref, image_ref,
                                       injected_files=[],
@@ -5138,7 +5144,8 @@ class ComputeTestCase(BaseTestCase,
         self.assertEqual(new_flavor['ephemeral_gb'], instance.ephemeral_gb)
         self.assertEqual(new_flavor['id'], instance.instance_type_id)
 
-    def test_rebuild_instance_notification(self):
+    @mock.patch.object(compute_utils, 'is_volume_backed_instance')
+    def test_rebuild_instance_notification(self, mock_is_bfv):
         # Ensure notifications on instance migrate/resize.
         old_time = datetime.datetime(2012, 4, 1)
         cur_time = datetime.datetime(2012, 12, 21, 12, 21)
@@ -5161,6 +5168,7 @@ class ComputeTestCase(BaseTestCase,
 
         inst_ref.task_state = task_states.REBUILDING
         inst_ref.save()
+        mock_is_bfv.return_value = False
         self.compute.rebuild_instance(self.context,
                                       inst_ref,
                                       image_ref, new_image_ref,

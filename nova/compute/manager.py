@@ -3229,6 +3229,88 @@ class ComputeManager(manager.Manager):
             migration.status = status
             migration.save()
 
+    def _reset_root_bdm(self, context, instance, image_id, root_bdm):
+        try:
+            old_volume = self.volume_api.get(context, root_bdm.volume_id)
+            new_volume = self.volume_api.create(
+                context,
+                old_volume['size'],
+                old_volume['display_name'],
+                old_volume['display_description'],
+                snapshot=old_volume['snapshot_id'],
+                image_id=image_id,
+                volume_type=old_volume['volume_type_id'],
+                metadata=old_volume['volume_metadata'],
+                availability_zone=old_volume['availability_zone'])
+        except Exception:
+            raise exception.FailedCreateVolume(image_id=image_id,
+                                               instance_uuid=instance.uuid)
+        self._await_block_device_map_created(context, new_volume['id'])
+        LOG.debug('Created new root volume %s. Updating bdm.',
+                  new_volume['id'])
+        new_attachment_id, new_cinfo = self._attach_new_root_bdm(context,
+                                                                 instance,
+                                                                 new_volume,
+                                                                 root_bdm)
+        values = {
+            'connection_info': jsonutils.dumps(new_cinfo),
+            'attachment_id': new_attachment_id,
+            'source_type': 'volume',
+            'destination_type': 'volume',
+            'snapshot_id': None,
+            'volume_id': new_volume['id'],
+            'no_device': None}
+        root_bdm.update(values)
+        root_bdm.save()
+
+    def _attach_new_root_bdm(self, context, instance, new_volume, bdm):
+        failed = False
+        new_cinfo = None
+        new_attachment_id = None
+        connector = self.driver.get_volume_connector(instance)
+        mountpoint = bdm['device_name']
+        try:
+            new_attachment_id = self.volume_api.attachment_create(
+                context, new_volume['id'], instance.uuid)['id']
+            new_cinfo = self.volume_api.attachment_update(
+                context, new_attachment_id, connector,
+                mountpoint)['connection_info']
+        except Exception:
+            failed = True
+            LOG.exception("Failed to attach new volume %s.", new_volume['id'])
+            with excutils.save_and_reraise_exception():
+                if new_attachment_id is None:
+                    # The API reserved the new volume so it would be in
+                    # 'attaching' status, so we need to unreserve it so it
+                    # goes back to 'available' status.
+                    self.volume_api.unreserve_volume(context, new_volume['id'])
+                else:
+                    # This is a new style attachment for the new volume, which
+                    # was created in the API. We just need to delete it here
+                    # to put the new volume back into 'available' status.
+                    self.volume_api.attachment_delete(
+                        context, new_attachment_id)
+        finally:
+            conn_volume = new_volume['id'] if failed else bdm.volume_id
+            if new_cinfo:
+                if bdm.attachment_id is None:
+                    # This is the pre-3.44 flow for new-style volume
+                    # attachments so just terminate the connection.
+                    self.volume_api.terminate_connection(context,
+                                                         conn_volume,
+                                                         connector)
+                else:
+                    # This is a new style volume attachment. If we failed, then
+                    # the new attachment was already deleted above in the
+                    # exception block and we have nothing more to do here. If
+                    # attachment update was successful in the driver, then we
+                    # need to "detach" the original attachment by deleting it.
+                    if not failed:
+                        self.volume_api.attachment_delete(
+                            context, bdm.attachment_id)
+
+        return (new_attachment_id, new_cinfo)
+
     def _rebuild_default_impl(self, context, instance, image_meta,
                               injected_files, admin_password, allocations,
                               bdms, detach_block_devices, attach_block_devices,
@@ -3248,6 +3330,20 @@ class ComputeManager(manager.Manager):
             self.driver.destroy(context, instance,
                                 network_info=network_info,
                                 block_device_info=block_device_info)
+            if compute_utils.is_volume_backed_instance(
+                context, instance, bdms):
+                root_bdm = block_device.get_root_bdm(bdms)
+                old_vol_id = root_bdm.volume_id
+                self._reset_root_bdm(context,
+                                     instance,
+                                     image_meta.id,
+                                     root_bdm)
+                if root_bdm.delete_on_termination:
+                    try:
+                        self.volume_api.delete(context, old_vol_id)
+                    except Exception:
+                        LOG.warning('Failed to delete old root volume: %s',
+                                    old_vol_id)
 
         instance.task_state = task_states.REBUILD_BLOCK_DEVICE_MAPPING
         instance.save(expected_task_state=[task_states.REBUILDING])
