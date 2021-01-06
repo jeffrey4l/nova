@@ -4342,6 +4342,8 @@ class LibvirtDriver(driver.ComputeDriver):
             CONF.libvirt.cpu_model_extra_flags])
 
         model = None
+        check = None
+        vendor_id = None
         if (flavor and flavor.extra_specs.get('hw:cpu_mode') and
             flavor.extra_specs.get('hw:cpu_model')):
             mode = flavor.extra_specs.get('hw:cpu_mode')
@@ -4365,6 +4367,16 @@ class LibvirtDriver(driver.ComputeDriver):
                              'migration can break unless all compute nodes '
                              'have identical cpus. AArch64 does not support '
                              'other modes.')
+                elif (caps.host.cpu.arch == fields.Architecture.X86_64 and
+                    caps.host.cpu.vendor == "Hygon" or (caps.host.cpu.vendor
+                    is None and type(caps.host.cpu.model) == str and
+                    caps.host.cpu.model.startswith('Opteron'))):
+                    # Libvirt version is greater than 7.0, vendor information
+                    # cannot be obtained so judging by CPU modle
+                    mode = "custom"
+                    model = "EPYC"
+                    check = "none"
+                    vendor_id = "AuthenticAMD"
                 else:
                     mode = "host-model"
             if mode == "none":
@@ -4379,6 +4391,9 @@ class LibvirtDriver(driver.ComputeDriver):
             cpu.model = model
         else:
             cpu.model = models[0] if models else None
+        cpu.vendor_id = vendor_id
+        if check:
+            cpu.check = check
 
         # compare flavor trait and cpu models, select the first mathched model
         if flavor and mode == "custom":

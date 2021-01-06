@@ -628,6 +628,7 @@ class LibvirtConfigCPU(LibvirtConfigObject):
         self.arch = None
         self.vendor = None
         self.model = None
+        self.vendor_id = None
 
         self.sockets = None
         self.cores = None
@@ -643,6 +644,7 @@ class LibvirtConfigCPU(LibvirtConfigObject):
                 self.arch = c.text
             elif c.tag == "model":
                 self.model = c.text
+                self.vendor_id = c.get("vendor_id")
             elif c.tag == "vendor":
                 self.vendor = c.text
             elif c.tag == "topology":
@@ -660,7 +662,10 @@ class LibvirtConfigCPU(LibvirtConfigObject):
         if self.arch is not None:
             cpu.append(self._text_node("arch", self.arch))
         if self.model is not None:
-            cpu.append(self._text_node("model", self.model))
+            model = self._text_node("model", self.model)
+            if self.vendor_id is not None:
+                model.set("vendor_id", self.vendor_id)
+            cpu.append(model)
         if self.vendor is not None:
             cpu.append(self._text_node("vendor", self.vendor))
 
@@ -766,12 +771,14 @@ class LibvirtConfigGuestCPU(LibvirtConfigCPU):
 
         self.mode = None
         self.match = "exact"
+        self.check = None
         self.numa = None
 
     def parse_dom(self, xmldoc):
         super(LibvirtConfigGuestCPU, self).parse_dom(xmldoc)
         self.mode = xmldoc.get('mode')
         self.match = xmldoc.get('match')
+        self.check = xmldoc.get('check')
         for child in xmldoc:
             if child.tag == "numa":
                 numa = LibvirtConfigGuestCPUNUMA()
@@ -784,6 +791,8 @@ class LibvirtConfigGuestCPU(LibvirtConfigCPU):
         if self.mode:
             cpu.set("mode", self.mode)
         cpu.set("match", self.match)
+        if self.check:
+            cpu.set("check", self.check)
         if self.numa is not None:
             cpu.append(self.numa.format_dom())
 
