@@ -3354,10 +3354,7 @@ class API(base.Base):
         instance.update(options_from_image)
 
         instance.task_state = task_states.REBUILDING
-        # An empty instance.image_ref is currently used as an indication
-        # of BFV.  Preserve that over a rebuild to not break users.
-        if not is_volume_backed:
-            instance.image_ref = image_href
+        instance.image_ref = image_href
         instance.kernel_id = kernel_id or ""
         instance.ramdisk_id = ramdisk_id or ""
         instance.progress = 0
