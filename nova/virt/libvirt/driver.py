@@ -3534,7 +3534,7 @@ class LibvirtDriver(driver.ComputeDriver):
             meta.flavor.ephemeral = new_flavor.ephemeral_gb
             meta.flavor.disk = new_flavor.root_gb
             meta.flavor.swap = new_flavor.swap
-            guest.set_metadata(meta.to_xml())
+            guest.set_metadata(encodeutils.to_utf8(meta.to_xml()))
 
         # Get the system metadata from the instance
         system_meta = utils.instance_sys_meta(instance)
