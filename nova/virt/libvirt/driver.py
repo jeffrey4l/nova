@@ -8450,6 +8450,10 @@ class LibvirtDriver(driver.ComputeDriver):
                       "support cpu model compare is %s",
                       min_libvirt_version)
             return
+        if cpu.model == "EPYC":
+            LOG.debug("Host CPU compatibility check does not make "
+                      "sense on Hygon; skip CPU comparison")
+            return
 
         u = ("http://libvirt.org/html/libvirt-libvirt-host.html#"
              "virCPUCompareResult")
