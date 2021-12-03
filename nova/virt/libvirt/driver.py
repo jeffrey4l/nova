@@ -4370,7 +4370,7 @@ class LibvirtDriver(driver.ComputeDriver):
                 elif (caps.host.cpu.arch == fields.Architecture.X86_64 and
                     caps.host.cpu.vendor == "Hygon" or (caps.host.cpu.vendor
                     is None and type(caps.host.cpu.model) == str and
-                    caps.host.cpu.model.startswith('Opteron'))):
+                    caps.host.cpu.model.startswith(('Opteron', 'EPYC')))):
                     # Libvirt version is greater than 7.0, vendor information
                     # cannot be obtained so judging by CPU modle
                     mode = "custom"
