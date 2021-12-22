@@ -18,7 +18,7 @@ import mock
 from oslo_utils.fixture import uuidsentinel
 from oslo_utils import uuidutils
 import six
-import urlparse
+import six.moves.urllib.parse as urlparse
 import webob
 
 from nova.api.openstack import api_version_request as avr

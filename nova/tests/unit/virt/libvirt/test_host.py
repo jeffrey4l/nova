@@ -298,7 +298,7 @@ class HostTestCase(test.NoDBTestCase):
         hostimpl._event_watchdog_callback(
             conn, dom, fakelibvirt.VIR_DOMAIN_EVENT_WATCHDOG_DEBUG, hostimpl)
         hostimpl._dispatch_events()
-        self.assertEqual(hostimpl.vms_watchdog_last.keys()[0],
+        self.assertEqual(list(hostimpl.vms_watchdog_last.keys())[0],
                          'cef19ce0-0ca2-11df-855d-b19fbce37686')
         self.assertEqual(
             hostimpl.vms_watchdog_last[

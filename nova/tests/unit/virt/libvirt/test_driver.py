@@ -21588,9 +21588,9 @@ class LibvirtDriverTestCase(test.NoDBTestCase, TraitsComparisonMixin):
                                   o_flavor,
                                   n_flavor)
             mock_set_vcpus.assert_called_once_with(4)
-            self.assertIn('<nova:flavor name="m1.resize2">',
+            self.assertIn(b'<nova:flavor name="m1.resize2">',
                           mock_set_metadata.call_args[0][0])
-            self.assertIn("<nova:vcpus>4</nova:vcpus>",
+            self.assertIn(b"<nova:vcpus>4</nova:vcpus>",
                           mock_set_metadata.call_args[0][0])
 
     def test_get_instance_disk_info_exception(self):
