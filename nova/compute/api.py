@@ -3698,6 +3698,19 @@ class API(base.Base):
             request_spec.numa_topology = hardware.numa_get_constraints(
                 new_instance_type, instance.image_meta)
 
+            # if the flavor is changed then we need to recalculate the
+            # pci_requests as well because the new flavor might request
+            # different pci_aliases
+            new_pci_requests = pci_request.get_pci_requests_from_flavor(
+                new_instance_type)
+            new_pci_requests.instance_uuid = instance.uuid
+            # The neutron based InstancePCIRequest cannot change during resize,
+            # so we just need to copy them from the old request
+            for request in request_spec.pci_requests.requests or []:
+                if request.source == objects.InstancePCIRequest.NEUTRON_PORT:
+                    new_pci_requests.requests.append(request)
+            request_spec.pci_requests = new_pci_requests
+
         instance.task_state = task_states.RESIZE_PREP
         instance.progress = 0
         instance.update(extra_instance_updates)
