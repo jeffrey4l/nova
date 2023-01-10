@@ -3704,6 +3704,11 @@ class LibvirtDriver(driver.ComputeDriver):
         return os.path.join(libvirt_utils.get_instance_path(instance),
                             'console.log')
 
+    @staticmethod
+    def _get_monitor_log_path(instance):
+        return os.path.join(libvirt_utils.get_instance_path(instance),
+                            'monitor.log')
+
     def _ensure_console_log_for_instance(self, instance):
         # NOTE(mdbooth): Although libvirt will create this file for us
         # automatically when it starts, it will initially create it with
@@ -5295,6 +5300,13 @@ class LibvirtDriver(driver.ComputeDriver):
         virtio_controller.type = 'virtio-serial'
         guest.add_device(virtio_controller)
 
+    def _add_monitor_device(self, guest, instance):
+        monitor = vconfig.LibvirtConfigGuestChannel()
+        monitor.type = 'file'
+        monitor.target_name = 'org.monitor.0'
+        monitor.source_path = self._get_monitor_log_path(instance)
+        guest.add_device(monitor)
+
     def _set_qemu_guest_agent(self, guest, flavor, instance, image_meta):
         # Enable qga only if the 'hw_qemu_guest_agent' is equal to yes
         if image_meta.properties.get('hw_qemu_guest_agent', False):
@@ -5314,6 +5326,10 @@ class LibvirtDriver(driver.ComputeDriver):
         rng_allowed = strutils.bool_from_string(rng_allowed_str)
         if rng_is_virtio and rng_allowed:
             self._add_rng_device(guest, flavor)
+        if CONF.libvirt.enable_monitor_channel == 'yes' or\
+                (CONF.libvirt.enable_monitor_channel == 'auto' and
+                 image_meta.properties.get('hw_monitor_guest_agent', False)):
+            self._add_monitor_device(guest, instance)
 
     def _get_guest_memory_backing_config(
             self, inst_topology, numatune, flavor, image_meta):

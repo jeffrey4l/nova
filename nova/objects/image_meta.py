@@ -174,12 +174,15 @@ class ImageMetaProps(base.NovaObject):
     # Version 1.22: Added 'gop', 'virtio' and 'none' to hw_video_model field
     # Version 1.23: Added 'hw_pmu' field
     # Version 1.24: Added 'hw_mem_encryption' field
-    VERSION = '1.24'
+    # Version 1.25: Added 'hw_monitor_guest_agent' field
+    VERSION = '1.25'
 
     def obj_make_compatible(self, primitive, target_version):
         super(ImageMetaProps, self).obj_make_compatible(primitive,
                                                         target_version)
         target_version = versionutils.convert_version_to_tuple(target_version)
+        if target_version < (1, 25):
+            primitive.pop('hw_monitor_guest_agent', None)
         if target_version < (1, 24):
             primitive.pop('hw_mem_encryption', None)
         if target_version < (1, 23):
@@ -499,6 +502,10 @@ class ImageMetaProps(base.NovaObject):
         # for trait in image_meta.traits_required:
         # will yield trait strings such as 'HW_CPU_X86_AVX2'
         'traits_required': fields.ListOfStringsField(),
+
+        # If the value is True and the enable_monitor_channel is 'auto'
+        # enable monit channel
+        'hw_monitor_guest_agent': fields.FlexibleBooleanField(),
     }
 
     # The keys are the legacy property names and
@@ -595,7 +602,7 @@ class ImageMetaProps(base.NovaObject):
     def _set_attr_from_trait_names(self, image_props):
         for trait in [six.text_type(k[6:]) for k, v in image_props.items()
                       if six.text_type(k).startswith("trait:") and
-                      six.text_type(v) == six.text_type('required')]:
+                         six.text_type(v) == six.text_type('required')]:
             if 'traits_required' not in self:
                 self.traits_required = []
             self.traits_required.append(trait)

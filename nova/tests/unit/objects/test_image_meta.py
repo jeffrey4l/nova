@@ -338,6 +338,7 @@ class TestImageMetaProps(test.NoDBTestCase):
             'hw_rescue_bus': 'ide',
             'hw_rescue_device': 'disk',
             'hw_watchdog_action': fields.WatchdogAction.DISABLED,
+            'hw_monitor_guest_agent': False,
         }
 
         obj = objects.ImageMetaProps(**props)

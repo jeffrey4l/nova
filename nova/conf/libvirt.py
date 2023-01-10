@@ -1360,6 +1360,18 @@ For example::
 """),
 ]
 
+libvirt_monitor_channel_opts = [
+    cfg.StrOpt('enable_monitor_channel',
+               default='auto',
+               choices=('auto', 'yes', 'no'),
+               help="""
+If you need to monitor of a VM, you need to enable this configuration,
+if value is 'yes', enable monitor channel,
+if value is 'auto' and 'hw_monitor_guest_agent' is True from image metadata,
+enable monitor channel,
+if value is 'no', disable monitor channel
+""")
+]
 
 ALL_OPTS = list(itertools.chain(
     libvirt_general_opts,
@@ -1381,6 +1393,7 @@ ALL_OPTS = list(itertools.chain(
     libvirt_virtio_queue_sizes,
     libvirt_volume_nvmeof_opts,
     libvirt_pmem_opts,
+    libvirt_monitor_channel_opts,
 ))
 
 
