@@ -24,6 +24,7 @@ from nova import exception
 from nova import objects
 from nova.objects import fields
 from nova.pci import stats
+from nova.pci import utils as pci_utils
 from nova.pci import whitelist
 
 CONF = cfg.CONF
@@ -398,5 +399,12 @@ def get_instance_pci_devs(inst, request_id=None):
     pci_devices = inst.pci_devices
     if pci_devices is None:
         return []
-    return [device for device in pci_devices if
+
+    def sort_by_function(pci_dev):
+        dbsf = pci_utils.parse_address(pci_dev.address)
+        domain, bus, slot, function = dbsf
+        return (domain, bus, slot, function)
+
+    pci_devices = [device for device in pci_devices if
                    device.request_id == request_id or request_id == 'all']
+    return sorted(pci_devices, key=sort_by_function)
